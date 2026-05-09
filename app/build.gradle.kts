@@ -46,7 +46,8 @@ android {
 }
 
 dependencies {
-    implementation("org.godotengine/godot@4.6.2.stable1")
+    implementation(libs.androidx.appcompat)
+    implementation("org.godotengine:godot:4.6.2.stable")
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
