@@ -1,12 +1,12 @@
 [gd_scene format=3 uid="uid://xb8ckc6f2vbv"]
 
-[node name="Node2D" type="Node2D" unique_id=567390296]
+[ext_resource type="Script" uid="uid://wc8fo0ynf4v4" path="res://gettester.gd" id="1_37kl0"]
 
-[node name="Camera2D" type="Camera2D" parent="." unique_id=669208701]
+[node name="Node2D" type="Node2D" unique_id=1025946398]
 
-[node name="Label" type="Label" parent="." unique_id=1823697420]
-offset_left = -91.684265
-offset_top = -36.873672
-offset_right = -51.684265
-offset_bottom = -13.8736725
-text = "aboba52"
+[node name="Label" type="Label" parent="." unique_id=1851000540]
+offset_right = 40.0
+offset_bottom = 23.0
+script = ExtResource("1_37kl0")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=28195255]

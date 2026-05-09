@@ -15,9 +15,17 @@ run/main_scene="uid://xb8ckc6f2vbv"
 config/features=PackedStringArray("4.6", "Mobile")
 config/icon="res://icon.svg"
 
+[autoload]
+
+Database="*uid://bd2b6sreskeo4"
+
 [display]
 
 window/handheld/orientation=1
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot-sqlite/plugin.cfg")
 
 [physics]
 
