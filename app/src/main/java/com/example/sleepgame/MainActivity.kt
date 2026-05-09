@@ -1,6 +1,7 @@
 package com.example.sleepgame
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -10,6 +11,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.RemoteViews
+import androidx.annotation.RequiresPermission
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -52,54 +55,56 @@ class MainActivity: AppCompatActivity(), GodotHost {
         NotificationManagerCompat.from(context).cancel(sleepControlsNotificationId)
     }
 
+    @SuppressLint("MissingPermission")
     fun showSleepControls() {
-        val context = this
+        createChannel(this)
+        val remoteViews = RemoteViews(this.packageName, R.layout.sleep_controls_notification)
 
-        createChannel(context)
-
-        val clickIntent = PendingIntent.getActivity(
-            context,
-            0,
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        remoteViews.setOnClickPendingIntent(
+            R.id.button_wake_up,
+            PendingIntent.getBroadcast(
+                this,
+                0,
+                Intent(this, SleepNotificationActionReceiver::class.java).apply {
+                    action = SleepNotificationActionReceiver.actionRecordWakeUp
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        )
+        remoteViews.setOnClickPendingIntent(
+            R.id.button_sleep_interruption,
+            PendingIntent.getBroadcast(
+                this,
+                1,
+                Intent(this, SleepNotificationActionReceiver::class.java).apply {
+                    action = SleepNotificationActionReceiver.actionRecordSleepInterruption
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        )
+        remoteViews.setOnClickPendingIntent(
+            R.id.button_fall_asleep,
+            PendingIntent.getBroadcast(
+                this,
+                2,
+                Intent(this, SleepNotificationActionReceiver::class.java).apply {
+                    action = SleepNotificationActionReceiver.actionRecordFallAsleep
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
         )
 
-        val sleepInterruptionIntent = PendingIntent.getBroadcast(
-            context,
-            1,
-            Intent(context, SleepNotificationActionReceiver::class.java).apply {
-                action = SleepNotificationActionReceiver.actionRecordSleepInterruption
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val wakeUpIntent = PendingIntent.getBroadcast(
-            context,
-            2,
-            Intent(
-                context,
-                SleepNotificationActionReceiver::class.java).apply {
-                action = SleepNotificationActionReceiver.actionRecordWakeUp
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Спать пора - уснул паучёк")
-            .setContentText("Лег в кроватку на бочёк")
-            .setContentIntent(clickIntent)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(remoteViews)
+            .setCustomBigContentView(remoteViews)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .addAction(R.drawable.ic_launcher_foreground, "Ночное пробуждение", sleepInterruptionIntent)
-            .addAction(R.drawable.ic_launcher_foreground, "Конец сна", wakeUpIntent)
             .build()
 
-        val manager = ContextCompat.getSystemService(context, NotificationManager::class.java)
-        manager?.notify(sleepControlsNotificationId, notification)
+        NotificationManagerCompat.from(this).notify(sleepControlsNotificationId, notification)
     }
 
     private fun createChannel(context: Context) {
@@ -162,7 +167,8 @@ class SleepNotificationActionReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        val actionRecordWakeUp = "ACTION_WAKE_UP"
-        val actionRecordSleepInterruption = "ACTION_SLEEP_INTERRUPTION"
+        val actionRecordFallAsleep = "ACTION_RECORD_FALL_ASLEEP"
+        val actionRecordWakeUp = "ACTION_RECORD_WAKE_UP"
+        val actionRecordSleepInterruption = "ACTION_RECORD_SLEEP_INTERRUPTION"
     }
 }
