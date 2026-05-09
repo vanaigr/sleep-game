@@ -18,6 +18,9 @@ import org.godotengine.godot.Godot
 import org.godotengine.godot.GodotActivity
 import org.godotengine.godot.GodotFragment
 import org.godotengine.godot.GodotHost
+import android.database.sqlite.SQLiteDatabase
+import android.util.Log
+import java.io.File
 
 class MainActivity: AppCompatActivity(), GodotHost {
     private var godotFragment: GodotFragment? = null
@@ -25,8 +28,24 @@ class MainActivity: AppCompatActivity(), GodotHost {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setContentView(R.layout.activity_main)
+
+        /*
+        SQLiteDatabase.openDatabase(
+            File(activity.filesDir, "sqlite.db").absolutePath,
+            null,
+            SQLiteDatabase.OPEN_READONLY
+        ).use { db ->
+            db.rawQuery("SELECT id FROM test", null).use { c ->
+                var results = ""
+                while (c.moveToNext()) {
+                    val id = c.getLong(0)
+                    results += "$id"
+                }
+                Log.d(TAG, results)
+            }
+        }
+         */
 
         val currentGodotFragment = supportFragmentManager.findFragmentById(R.id.godot_fragment_container)
         if (currentGodotFragment is GodotFragment) {
@@ -42,4 +61,8 @@ class MainActivity: AppCompatActivity(), GodotHost {
     override fun getActivity() = this
 
     override fun getGodot() = godotFragment?.godot
+
+    companion object {
+        val TAG = "Native"
+    }
 }
