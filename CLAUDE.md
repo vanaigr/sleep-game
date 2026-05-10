@@ -1,0 +1,1 @@
+This is an Android project with embedded Godot. Godot version is 4.6.2 with root at `./app/src/main/assets`.
