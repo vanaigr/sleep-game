@@ -133,7 +133,7 @@ class SleepNotificationActionReceiver : BroadcastReceiver() {
 
 fun sleepControlsUpdate(context: Context) {
     val db = Database(context)
-    if(db.getActiveId() == null) sleepControlsHide(context)
+    if(db.getCurrentSleepPeriod().ended) sleepControlsHide(context)
     else sleepControlsShow(context)
 }
 

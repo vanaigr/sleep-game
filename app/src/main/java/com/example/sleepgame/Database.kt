@@ -5,7 +5,6 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import androidx.core.database.getIntOrNull
-import androidx.core.database.getStringOrNull
 import androidx.core.database.sqlite.transaction
 import java.io.File
 import java.time.ZonedDateTime
@@ -31,50 +30,13 @@ class Database {
     private fun migrate() {
         if (db.version == 0) {
             db.transaction {
+                // Type is period_begin, fall_asleep, interruption, wake_up, period_end
                 db.execSQL(
                     """
-                    create table sleep_periods(
+                    create table sleep_records(
                         id integer primary key autoincrement,
-                        begin_time ZonedDateTime not null,
-                        end_time ZonedDateTime
-                    )
-                """.trimIndent()
-                )
-
-                db.execSQL(
-                    """
-                    create table active_sleep_period(
-                        id integer
-                    )
-                """.trimIndent()
-                )
-                db.execSQL("insert into active_sleep_period(id) values(null)")
-
-                db.execSQL(
-                    """
-                    create table failed_fall_asleeps(
-                        id integer primary key autoincrement,
-                        sleep_period_id integer not null,
-                        recorded_time ZonedDateTime not null
-                    )
-                """.trimIndent()
-                )
-
-                db.execSQL(
-                    """
-                    create table failed_wake_ups(
-                        id integer primary key autoincrement,
-                        sleep_period_id integer not null,
-                        recorded_time ZonedDateTime not null
-                    )
-                """.trimIndent()
-                )
-
-                db.execSQL(
-                    """
-                    create table sleep_interruptions(
-                        id integer primary key autoincrement,
-                        sleep_period_id integer not null,
+                        period_id integer not null,
+                        type text not null,
                         recorded_time ZonedDateTime not null
                     )
                 """.trimIndent()
@@ -89,132 +51,108 @@ class Database {
         val time = ZonedDateTime.now().format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         return db.transaction(exclusive = true) {
-            val activeId = getActiveId()
-            Log.d(TAG, "Active row $activeId")
+            val curPeriod = getCurrentSleepPeriod()
+            Log.d(TAG, "Active row $curPeriod")
 
-            if(activeId != null) {
-                val endTime = db.rawQuery("select end_time from sleep_periods where id = ?", arrayOf("" + activeId)).use {
-                    it.moveToNext()
-                    it.getStringOrNull(0)
-                }
-                if(endTime == null) {
-                    db.execSQL(
-                        "update sleep_periods set end_time = ? where id = ?",
-                        arrayOf(time, activeId)
-                    )
-                }
-                db.execSQL("update active_sleep_period set id = null")
+            if(curPeriod.ended) {
+                Log.d(TAG, "Starting new period")
 
-                Log.d(TAG, "Updated row $activeId")
+                val id = curPeriod.id + 1
+                db.execSQL(
+                    "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
+                    arrayOf(id, "period_begin", time)
+                )
+
                 false
             }
             else {
-                val rowid = db.insert("sleep_periods", null, ContentValues().apply {
-                    put("begin_time", time)
-                })
-                val newId = db.rawQuery("select id from sleep_periods where rowid = ?", arrayOf("" + rowid)).use {
-                    it.moveToNext()
-                    it.getInt(0)
-                }
-                db.execSQL("update active_sleep_period set id = ?", arrayOf(newId))
-                Log.d(TAG, "Inserted new row: $newId ($rowid)")
+                Log.d(TAG, "Ending current period")
+
+                db.execSQL(
+                    "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
+                    arrayOf(curPeriod.id, "period_end", time)
+                )
+
                 true
             }
         }
     }
-    fun recordWakeUp(): Boolean {
+    fun recordWakeUp() {
         Log.d(TAG, "recordFallAsleep")
 
         val time = ZonedDateTime.now().format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
-        return db.transaction(exclusive = true) {
-            val activeId = getActiveId()
-            Log.d(TAG, "Active $activeId")
-            if(activeId != null) {
-                val prevEndTime = db.rawQuery(
-                    "select end_time from sleep_periods where id = ?",
-                    arrayOf("" + activeId)
-                ).use {
-                    it.moveToNext()
-                    it.getStringOrNull(0)
-                }
-                if (prevEndTime != null) {
-                    db.execSQL(
-                        "insert into failed_wake_ups(sleep_period_id, recorded_time) values (?, ?)",
-                        arrayOf<Any>(activeId, prevEndTime)
-                    )
-                }
-                db.execSQL(
-                    "update sleep_periods set end_time = ? where id = ?",
-                    arrayOf(time, activeId)
-                )
-                true
+        db.transaction(exclusive = true) {
+            val curPeriod = getCurrentSleepPeriod()
+            if(curPeriod.ended) {
+                Log.w(TAG, "Current period has ended and this action should not have been accessible")
+                // fallthrough
             }
-            else {
-                false
-            }
+
+            db.execSQL(
+                "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
+                arrayOf(curPeriod.id, "wake_up", time)
+            )
         }
     }
 
-    fun recordSleepInterruption(): Boolean {
+    fun recordSleepInterruption() {
         Log.d(TAG, "recordSleepInterruption")
 
         val time = ZonedDateTime.now().format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
-        return db.transaction(exclusive = true) {
-            val activeId = getActiveId()
-            Log.d(TAG, "Active $activeId")
-            if(activeId != null) {
-                db.execSQL(
-                    "insert into sleep_interruptions(sleep_period_id, recorded_time) values (?, ?)",
-                    arrayOf<Any>(activeId, time)
-                )
-                true
+        db.transaction(exclusive = true) {
+            val curPeriod = getCurrentSleepPeriod()
+            if(curPeriod.ended) {
+                Log.w(TAG, "Current period has ended and this action should not have been accessible")
+                // fallthrough
             }
-            else {
-                false
-            }
+
+            db.execSQL(
+                "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
+                arrayOf(curPeriod.id, "interruption", time)
+            )
         }
     }
 
-    fun recordFallAsleep(): Boolean {
+    fun recordFallAsleep() {
         Log.d(TAG, "recordFallAsleep")
 
         val time = ZonedDateTime.now().format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
-        return db.transaction(exclusive = true) {
-            val activeId = getActiveId()
-            Log.d(TAG, "Active $activeId")
+        db.transaction(exclusive = true) {
+            val curPeriod = getCurrentSleepPeriod()
+            if(curPeriod.ended) {
+                Log.w(TAG, "Current period has ended and this action should not have been accessible")
+                // fallthrough
+            }
 
-            if(activeId != null) {
-                val prevBeginTime = db.rawQuery(
-                    "select begin_time from sleep_periods where id = ?",
-                    arrayOf("" + activeId)
-                ).use {
-                    it.moveToNext()
-                    it.getString(0)
-                }
-                db.execSQL(
-                    "insert into failed_fall_asleeps(sleep_period_id, recorded_time) values (?, ?)",
-                    arrayOf(activeId, prevBeginTime)
-                )
-                db.execSQL(
-                    "update sleep_periods set begin_time = ? where id = ?",
-                    arrayOf(time, activeId)
-                )
-                true
-            }
-            else {
-                false
-            }
+            db.execSQL(
+                "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
+                arrayOf(curPeriod.id, "fall_asleep", time)
+            )
         }
     }
 
-    fun getActiveId(): Int? {
-        return db.rawQuery("select id from active_sleep_period", arrayOf()).use {
+    data class SleepPeriod(val id: Int, val ended: Boolean)
+
+    fun getCurrentSleepPeriod(): SleepPeriod {
+        val curPeriodId = db.rawQuery("select max(period_id) from sleep_records", arrayOf()).use {
             it.moveToNext()
             it.getIntOrNull(0)
         }
+        if(curPeriodId == null) {
+            return SleepPeriod(0, true)
+        }
+
+        val curPeriodEnded = db.rawQuery(
+            "select count(*) from sleep_records where period_id = ? and type = ?",
+            arrayOf("" + curPeriodId, "period_end")
+        ).use {
+            it.moveToNext()
+            it.getLong(0) != 0L
+        }
+        return SleepPeriod(curPeriodId, curPeriodEnded)
     }
 
     companion object {

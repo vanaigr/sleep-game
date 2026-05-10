@@ -4,25 +4,22 @@ func _ready() -> void:
 	pass
 	
 func _process(delta: float) -> void:
-	Database.db.query_with_bindings('select id, begin_time, end_time from sleep_periods order by id', [])
-	var ranges = Database.db.query_result
+	Database.db.query_with_bindings('select id, period_id, type, recorded_time from sleep_records order by id', [])
+	var records = Database.db.query_result
+
+	var recordsByPeriod = {}
+	for record in records:
+		var byPeriod = recordsByPeriod.get(record["period_id"], [])
+		byPeriod.append(record)
+		recordsByPeriod[record["period_id"]] = byPeriod
 	
-	Database.db.query_with_bindings('select sleep_period_id, recorded_time from sleep_interruptions order by id', [])
-	var interruptions = Database.db.query_result
-	var interruptionsByRange = {}
-	for interruption in interruptions:
-		var byRange = interruptionsByRange.get(interruption["sleep_period_id"], [])
-		byRange.append(interruption)
-		interruptionsByRange[interruption["sleep_period_id"]] = byRange
-	
+	var sleepPeriods = recordsByPeriod.values()
+	sleepPeriods.sort_custom(func(a, b): return a[0].id < b[0].id) # id is proxy for time
 	
 	var labelText = ""
-	for range in ranges:
-		var byRange = interruptionsByRange.get(range["id"], [])
-		labelText = labelText + str(range["begin_time"])
-		for interruption in byRange:
-			labelText = labelText + "\n @ " + interruption["recorded_time"]
-		labelText = labelText + "\n - " + str(range["end_time"]) + "\n"
+	for sleepPeriod in sleepPeriods:
+		labelText += "{ " 
+		labelText += ",\n  ".join(sleepPeriod.map(func(it): return it["type"] + ": " + it["recorded_time"]))
+		labelText += " }\n"
 		
 	text = labelText
-	
