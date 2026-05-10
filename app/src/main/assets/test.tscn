@@ -8,15 +8,15 @@
 [node name="Camera2D" type="Camera2D" parent="." unique_id=28195255]
 
 [node name="Button" type="Button" parent="." unique_id=454596179]
-offset_left = -542.0
+offset_left = -521.0
 offset_top = -750.0
-offset_right = -15.0
+offset_right = 6.0
 offset_bottom = -400.0
 text = "Toggle notification"
 script = ExtResource("2_8uh7m")
 
 [node name="ScrollContainer" type="ScrollContainer" parent="." unique_id=1427462767]
-offset_left = -512.0
+offset_left = -528.0
 offset_top = -383.0
 offset_right = 530.0
 offset_bottom = 1130.0
