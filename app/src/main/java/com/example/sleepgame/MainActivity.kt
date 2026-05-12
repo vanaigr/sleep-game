@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.database.Cursor
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -19,6 +20,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.example.sleepgame.MainActivity.Companion.CHANNEL_ID
 import com.example.sleepgame.MainActivity.Companion.sleepControlsNotificationId
+import org.godotengine.godot.Dictionary
 import org.godotengine.godot.Godot
 import org.godotengine.godot.GodotFragment
 import org.godotengine.godot.GodotHost
@@ -92,6 +94,29 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
 
     override fun getPluginName() = "BridgePlugin"
     override fun getPluginSignals() = setOf<SignalInfo>()
+
+    @UsedByGodot
+    fun query(sql: String, args: Array<String>): Array<Dictionary> {
+        val db = Database(context)
+        return db.db.rawQuery(sql, args).use {
+            val result = mutableListOf<Dictionary>()
+            while(it.moveToNext()) {
+                val row = Dictionary()
+                for (i in 0 until it.columnCount) {
+                    row[it.getColumnName(i)] = when (it.getType(i)) {
+                        Cursor.FIELD_TYPE_NULL    -> null
+                        Cursor.FIELD_TYPE_INTEGER -> it.getLong(i)
+                        Cursor.FIELD_TYPE_FLOAT   -> it.getDouble(i)
+                        Cursor.FIELD_TYPE_STRING  -> it.getString(i)
+                        Cursor.FIELD_TYPE_BLOB    -> it.getBlob(i)
+                        else -> it.getString(i)
+                    }
+                }
+                result.add(row)
+            }
+            result.toTypedArray()
+        }
+    }
 
     /**
      * @returns: whether the current status is sleep

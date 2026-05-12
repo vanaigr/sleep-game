@@ -1,12 +1,11 @@
 extends Node
 
-var db: SQLite
+var bridgePlugin := Engine.get_singleton("BridgePlugin")
 
 func _ready():
-	db = SQLite.new()
-	db.path = "user://sqlite.db"
-	db.open_db()
-	
-	db.query_with_bindings('create table if not exists test(id integer primary key)', [])
-	db.query_with_bindings('insert into test(id) values(1) on conflict(id) do nothing', [])
+	pass
    
+func query(sql: String, args: Array[String]) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	result.assign(bridgePlugin.query(sql, args))
+	return result

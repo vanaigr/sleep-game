@@ -4,8 +4,10 @@ func _ready() -> void:
 	pass
 	
 func _process(delta: float) -> void:
-	Database.db.query_with_bindings('select id, period_id, type, recorded_time from sleep_records order by id', [])
-	var records = Database.db.query_result
+	var records = Database.query(
+		'select id, period_id, type, recorded_time from sleep_records order by id', 
+		[]
+	)
 
 	var recordsByPeriod = {}
 	for record in records:
@@ -15,6 +17,8 @@ func _process(delta: float) -> void:
 	
 	var sleepPeriods = recordsByPeriod.values()
 	sleepPeriods.sort_custom(func(a, b): return a[0].id < b[0].id) # id is proxy for time
+	
+	print(recordsByPeriod)
 	
 	var labelText = ""
 	for sleepPeriod in sleepPeriods:
