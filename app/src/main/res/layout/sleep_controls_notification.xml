@@ -3,7 +3,6 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="8dp"
     android:gravity="center">
 
     <ImageButton
@@ -30,5 +29,4 @@
         android:background="?android:attr/selectableItemBackground"
         android:src="@drawable/moon"
         />
-
 </LinearLayout>
