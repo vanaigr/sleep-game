@@ -36,6 +36,10 @@ import org.godotengine.godot.plugin.GodotPlugin
 import org.godotengine.godot.plugin.SignalInfo
 import org.godotengine.godot.plugin.UsedByGodot
 import java.lang.ref.WeakReference
+import java.time.ZonedDateTime
+import java.time.temporal.ChronoUnit
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 class MainActivity: AppCompatActivity(), GodotHost {
     private lateinit var godotFragment: GodotFragment
@@ -139,6 +143,67 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
     override fun getPluginSignals() = setOf<SignalInfo>()
 
     @UsedByGodot
+    fun getStats(): Dictionary? {
+        val db = Database(context)
+
+        val lastCompletedPeriod = db.db.rawQuery(
+            "select max(period_id) from sleep_records where type = 'wake_up' or type = 'period_end' ",
+            arrayOf(),
+        ).use {
+            if(!it.moveToNext()) null
+            else it.getInt(0)
+        }
+        if(lastCompletedPeriod == null) return null
+
+        val latestFallAsleep =  db.db.rawQuery(
+            "select recorded_time from sleep_records where period_id = ? and type in (?, ?) order by id desc limit 1",
+            arrayOf("" + lastCompletedPeriod, "period_begin", "fall_asleep"),
+        ).use {
+            if(!it.moveToNext()) null
+            else it.getString(0)
+        }
+
+        val earliestWakeUp = db.db.rawQuery(
+            "select recorded_time from sleep_records where period_id = ? and type in (?, ?) order by id limit 1",
+            arrayOf("" + lastCompletedPeriod, "period_end", "wake_up"),
+        ).use {
+            if(!it.moveToNext()) null
+            else it.getString(0)
+        }
+
+        if(latestFallAsleep == null || earliestWakeUp == null) return null
+
+        val quality = db.db.rawQuery(
+            "select quality from sleep_quality where period_id = ? limit 1",
+            arrayOf("" + lastCompletedPeriod),
+        ).use {
+            if(!it.moveToNext()) 0
+            else it.getInt(0)
+        }
+
+        val begin = ZonedDateTime.parse(latestFallAsleep)
+        val end = ZonedDateTime.parse(earliestWakeUp)
+        val sleepDuration = java.time.Duration.between(begin, end).seconds
+
+        val timezone = ZonedDateTime.now().zone
+
+        val result = Dictionary()
+        result["duration"] = durationSecToString(sleepDuration)
+        result["quality"] = when(quality) {
+            1 -> "Не спал"
+            2 -> "Ужасно"
+            3 -> "Не очень"
+            4 -> "Не идеально"
+            5 -> "Замечательно"
+            else -> "Не записано"
+        }
+        result["begin_time"] = begin.toInstant().atZone(timezone).toLocalTime().truncatedTo(ChronoUnit.SECONDS).toString()
+        result["end_time"] = end.toInstant().atZone(timezone).toLocalTime().truncatedTo(ChronoUnit.SECONDS).toString()
+
+        return result
+    }
+
+    @UsedByGodot
     fun query(sql: String, args: Array<String>): Array<Dictionary> {
         val db = Database(context)
         return db.db.rawQuery(sql, args).use {
@@ -174,6 +239,18 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
 
         return active
     }
+}
+
+fun durationSecToString(value: Long): String {
+    val sign = if(value >= 0) "" else "-"
+
+    val totalSeconds = abs(value)
+    val totalMinutes = totalSeconds / 60
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes - hours * 60
+    val seconds = totalSeconds - totalMinutes * 60
+
+    return "$sign$hours ч. $minutes мин. $seconds сек."
 }
 
 class SleepNotificationActionReceiver : BroadcastReceiver() {

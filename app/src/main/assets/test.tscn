@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://xb8ckc6f2vbv"]
 
-[ext_resource type="Script" uid="uid://wc8fo0ynf4v4" path="res://gettester.gd" id="1_37kl0"]
+[ext_resource type="Script" uid="uid://cict6ubrgcwhr" path="res://statsTable.gd" id="2_6uqi0"]
 [ext_resource type="Script" uid="uid://dkd6pimsyca1u" path="res://toggleNotification.gd" id="2_8uh7m"]
 
 [node name="Node2D" type="Node2D" unique_id=1025946398]
@@ -15,16 +15,9 @@ offset_bottom = -400.0
 text = "Toggle notification"
 script = ExtResource("2_8uh7m")
 
-[node name="ScrollContainer" type="ScrollContainer" parent="." unique_id=1427462767]
-offset_left = -528.0
-offset_top = -383.0
-offset_right = 530.0
-offset_bottom = 1130.0
-
-[node name="Label" type="Label" parent="ScrollContainer" unique_id=1851000540]
-layout_mode = 2
-theme_override_font_sizes/font_size = 24
-autowrap_trim_flags = 0
-script = ExtResource("1_37kl0")
+[node name="Label" type="Label" parent="." unique_id=1167014568]
+offset_right = 529.0
+offset_bottom = 540.0
+script = ExtResource("2_6uqi0")
 
 [connection signal="pressed" from="Button" to="Button" method="_on_pressed"]
