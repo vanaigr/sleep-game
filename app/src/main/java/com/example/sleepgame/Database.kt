@@ -57,7 +57,7 @@ class Database {
         }
     }
 
-    fun toggleSleepPeriodActivation(): Boolean {
+    fun startSleepPeriod(): Boolean {
         val time = ZonedDateTime.now().format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         return db.transaction(exclusive = true) {
@@ -73,9 +73,23 @@ class Database {
                     arrayOf(id, "period_begin", time)
                 )
 
-                false
+                true
             }
             else {
+                Log.d(TAG, "Already started")
+                false
+            }
+        }
+    }
+
+    fun endSleepPeriod(): Boolean {
+        val time = ZonedDateTime.now().format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
+
+        return db.transaction(exclusive = true) {
+            val curPeriod = getCurrentSleepPeriod()
+            Log.d(TAG, "Active row $curPeriod")
+
+            if(!curPeriod.ended) {
                 Log.d(TAG, "Ending current period")
 
                 db.execSQL(
@@ -84,6 +98,10 @@ class Database {
                 )
 
                 true
+            }
+            else {
+                Log.d(TAG, "Already ended")
+                false
             }
         }
     }

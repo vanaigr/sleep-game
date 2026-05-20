@@ -226,18 +226,17 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
         }
     }
 
-    /**
-     * @returns: whether the current status is sleep
-     *  */
     @UsedByGodot
-    fun toggleSleepPeriodActivation(): Boolean {
+    fun clickBed() {
         val db = Database(context)
-
-        val active = db.toggleSleepPeriodActivation()
-        Log.d(MainActivity.TAG, "Active: $active")
+        db.startSleepPeriod()
         sleepControlsUpdate(activity ?: context)
-
-        return active
+    }
+    @UsedByGodot
+    fun clickAlarmClock() {
+        val db = Database(context)
+        db.endSleepPeriod()
+        sleepControlsUpdate(activity ?: context)
     }
 }
 
