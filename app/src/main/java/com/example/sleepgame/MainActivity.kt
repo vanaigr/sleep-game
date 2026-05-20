@@ -74,8 +74,11 @@ class MainActivity: AppCompatActivity(), GodotHost {
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "Кнопки записи сна"
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            setShowBadge(true)
         }
         val manager = context.getSystemService(NotificationManager::class.java)
+        for (oldId in MainActivity.OLD_CHANNEL_IDS) manager.deleteNotificationChannel(oldId)
         manager.createNotificationChannel(channel)
         //}
     }
@@ -83,7 +86,8 @@ class MainActivity: AppCompatActivity(), GodotHost {
     companion object {
         val TAG = "Native"
 
-        val CHANNEL_ID = "sleep_channel"
+        val CHANNEL_ID = "sleep_channel_v2"
+        val OLD_CHANNEL_IDS = arrayOf("sleep_channel")
         val sleepControlsNotificationId = 1001
     }
 }
@@ -212,6 +216,8 @@ fun sleepControlsShow(context: Context) {
         .setOngoing(true)
         .setOnlyAlertOnce(true)
         .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        .setCategory(NotificationCompat.CATEGORY_REMINDER)
         .build()
 
     NotificationManagerCompat.from(context).notify(sleepControlsNotificationId, notification)
