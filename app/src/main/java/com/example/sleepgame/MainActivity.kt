@@ -2,6 +2,9 @@ package com.example.sleepgame
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.app.Application
+import android.app.Dialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -14,11 +17,15 @@ import android.database.Cursor
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.View
+import android.widget.Button
 import android.widget.RemoteViews
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.database.getIntOrNull
 import com.example.sleepgame.MainActivity.Companion.CHANNEL_ID
 import com.example.sleepgame.MainActivity.Companion.sleepControlsNotificationId
 import org.godotengine.godot.Dictionary
@@ -28,6 +35,7 @@ import org.godotengine.godot.GodotHost
 import org.godotengine.godot.plugin.GodotPlugin
 import org.godotengine.godot.plugin.SignalInfo
 import org.godotengine.godot.plugin.UsedByGodot
+import java.lang.ref.WeakReference
 
 class MainActivity: AppCompatActivity(), GodotHost {
     private lateinit var godotFragment: GodotFragment
@@ -47,7 +55,6 @@ class MainActivity: AppCompatActivity(), GodotHost {
         setContentView(R.layout.activity_main)
 
         createSleepControlsChannel(this)
-        sleepControlsUpdate(this)
 
         registerReceiver(screenStateReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -63,6 +70,13 @@ class MainActivity: AppCompatActivity(), GodotHost {
                 .replace(R.id.godot_fragment_container, godotFragment)
                 .commitNowAllowingStateLoss()
         }
+
+        registerActivityLifecycleCallbacks(MainActivityTracker)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        sleepControlsUpdate(this)
     }
 
     override fun onDestroy() {
@@ -156,7 +170,7 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
 
         val active = db.toggleSleepPeriodActivation()
         Log.d(MainActivity.TAG, "Active: $active")
-        sleepControlsUpdate(context)
+        sleepControlsUpdate(activity ?: context)
 
         return active
     }
@@ -168,12 +182,15 @@ class SleepNotificationActionReceiver : BroadcastReceiver() {
         when (intent.action) {
             actionRecordWakeUp -> {
                 db.recordWakeUp()
+                sleepControlsUpdate(context)
             }
             actionRecordSleepInterruption -> {
                 db.recordSleepInterruption()
+                sleepControlsUpdate(context)
             }
             actionRecordFallAsleep -> {
                 db.recordFallAsleep()
+                sleepControlsUpdate(context)
             }
         }
     }
@@ -186,9 +203,88 @@ class SleepNotificationActionReceiver : BroadcastReceiver() {
 }
 
 fun sleepControlsUpdate(context: Context) {
-    val db = Database(context)
-    if(db.getCurrentSleepPeriod().ended) sleepControlsHide(context)
+    if(Database(context).getCurrentSleepPeriod().ended) sleepControlsHide(context)
     else sleepControlsShow(context)
+
+    sleepQualityUpdate()
+}
+
+fun sleepQualityUpdate() {
+    val TAG = "Q Check"
+
+    Log.d(TAG, "Begin")
+
+    val activity = MainActivityTracker.resumedActivity
+    if(activity == null) {
+        Log.d(TAG, "Skipping: activity is not opened")
+        return
+    }
+    if (activity.isFinishing || activity.isDestroyed) {
+        Log.d(TAG, "Skipping: activity is finishing (${activity.isFinishing}) or destroyed (${activity.isDestroyed})")
+        return
+    }
+
+    val db = Database(activity).db
+
+    val curPeriodId = db.rawQuery("select max(period_id) from sleep_records", arrayOf()).use {
+        it.moveToNext()
+        it.getIntOrNull(0)
+    }
+    if(curPeriodId == null) {
+        Log.d(TAG, "Skipping: no current period")
+        return
+    }
+    Log.d(TAG, "Checking $curPeriodId")
+
+    val alreadyRecorded = db.rawQuery(
+        "select 1 from sleep_quality where period_id = ? limit 1",
+        arrayOf("" + curPeriodId)
+    ).use {
+        it.moveToNext()
+    }
+    if(alreadyRecorded) {
+        Log.d(TAG, "Skipping: already recorded")
+        return
+    }
+
+    val wokeUp = db.rawQuery(
+        "select 1 from sleep_records where period_id = ? and type in (?, ?) limit 1",
+        arrayOf("" + curPeriodId, "wake_up", "period_end")
+    ).use {
+        it.moveToNext()
+    }
+    if(!wokeUp) {
+        Log.d(TAG, "Skipping: haven't woken up")
+        return
+    }
+
+    activity.runOnUiThread {
+        val db = Database(activity).db
+
+        val dialog = Dialog(activity)
+        dialog.setContentView(R.layout.sleep_quality)
+
+        val setupSelectionButton = { quality: Int, button: View ->
+            button.setOnClickListener {
+                db.execSQL(
+                    "insert or replace into sleep_quality(period_id, quality) values(?, ?)",
+                    arrayOf(curPeriodId, quality),
+                )
+                Log.d(TAG, "Inserted quality record for $curPeriodId: $quality")
+                dialog.dismiss()
+            }
+        }
+        setupSelectionButton(5, dialog.findViewById(R.id.ideal))
+        setupSelectionButton(4, dialog.findViewById(R.id.not_ideal))
+        setupSelectionButton(3, dialog.findViewById(R.id.not_good))
+        setupSelectionButton(2, dialog.findViewById(R.id.terrible))
+        setupSelectionButton(1, dialog.findViewById(R.id.no_sleep))
+        setupSelectionButton(0, dialog.findViewById(R.id.cancel))
+
+        dialog.show()
+    }
+
+    Log.d(TAG, "Showing")
 }
 
 fun sleepControlsHide(context: Context) {
@@ -246,4 +342,24 @@ fun sleepControlsShow(context: Context) {
         .build()
 
     NotificationManagerCompat.from(context).notify(sleepControlsNotificationId, notification)
+}
+
+
+object MainActivityTracker : Application.ActivityLifecycleCallbacks {
+    private var current: WeakReference<Activity>? = null
+
+    val resumedActivity: Activity? get() = current?.get()
+
+    override fun onActivityResumed(activity: Activity) {
+        current = WeakReference(activity)
+    }
+    override fun onActivityPaused(activity: Activity) {
+        if (current?.get() === activity) current = null
+    }
+
+    override fun onActivityCreated(a: Activity, b: Bundle?) {}
+    override fun onActivityStarted(a: Activity) {}
+    override fun onActivityStopped(a: Activity) {}
+    override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
+    override fun onActivityDestroyed(a: Activity) {}
 }

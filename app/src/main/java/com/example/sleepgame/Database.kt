@@ -27,21 +27,32 @@ class Database {
     }
 
     private fun migrate() {
-        if (db.version == 0) {
-            db.transaction {
+        db.transaction {
+            if (db.version == 0) {
                 // Type is period_begin, fall_asleep, interruption, wake_up, period_end
                 db.execSQL(
                     """
-                    create table sleep_records(
-                        id integer primary key autoincrement,
-                        period_id integer not null,
-                        type text not null,
-                        recorded_time ZonedDateTime not null
-                    )
-                """.trimIndent()
+                create table sleep_records(
+                    id integer primary key autoincrement,
+                    period_id integer not null,
+                    type text not null,
+                    recorded_time ZonedDateTime not null
                 )
-
+            """.trimIndent()
+                )
                 db.version = 1
+            }
+            if(db.version == 1) {
+                // 0 - dismissed, 1 - no sleep, 2 - terrible, 3 - not good, 4 - not ideal, 5 - ideal
+                db.execSQL(
+                    """
+                create table sleep_quality(
+                    period_id integer primary key,
+                    quality integer not null
+                )
+            """.trimIndent()
+                )
+                db.version = 2
             }
         }
     }

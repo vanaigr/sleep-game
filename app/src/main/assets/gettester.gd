@@ -18,8 +18,6 @@ func _process(delta: float) -> void:
 	var sleepPeriods = recordsByPeriod.values()
 	sleepPeriods.sort_custom(func(a, b): return a[0].id < b[0].id) # id is proxy for time
 	
-	print(recordsByPeriod)
-	
 	var labelText = ""
 	for sleepPeriod in sleepPeriods:
 		labelText += "{ " 
