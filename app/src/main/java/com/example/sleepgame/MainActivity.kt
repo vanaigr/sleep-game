@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.database.Cursor
 import android.os.Build
@@ -32,12 +33,26 @@ class MainActivity: AppCompatActivity(), GodotHost {
     private lateinit var godotFragment: GodotFragment
     private var bridgePlugin: BridgePlugin? = null
 
+    private val screenStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_SCREEN_OFF
+                || intent.action == Intent.ACTION_USER_PRESENT) {
+                sleepControlsUpdate(context)
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         createSleepControlsChannel(this)
         sleepControlsUpdate(this)
+
+        registerReceiver(screenStateReceiver, IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_USER_PRESENT)
+        })
 
         val currentGodotFragment = supportFragmentManager.findFragmentById(R.id.godot_fragment_container)
         if (currentGodotFragment is GodotFragment) {
@@ -48,6 +63,16 @@ class MainActivity: AppCompatActivity(), GodotHost {
                 .replace(R.id.godot_fragment_container, godotFragment)
                 .commitNowAllowingStateLoss()
         }
+    }
+
+    override fun onDestroy() {
+        try { unregisterReceiver(screenStateReceiver) } catch (_: IllegalArgumentException) {}
+        super.onDestroy()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        sleepControlsUpdate(this)
     }
 
     override fun getActivity() = this
