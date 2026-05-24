@@ -1,5 +1,6 @@
 [gd_scene format=3 uid="uid://xb8ckc6f2vbv"]
 
+[ext_resource type="StyleBox" uid="uid://bjhmoyj3i4fsd" path="res://TransparentButton.tres" id="1_00tp4"]
 [ext_resource type="Script" uid="uid://dvlfm2hfrlnhd" path="res://bed.gd" id="1_6uqi0"]
 [ext_resource type="Script" uid="uid://cict6ubrgcwhr" path="res://statsTable.gd" id="2_6uqi0"]
 [ext_resource type="Script" uid="uid://0iov6wr84lb1" path="res://alarmClock.gd" id="2_ppyta"]
@@ -14,24 +15,16 @@
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=28195255]
 
-[node name="Button" type="Button" parent="." unique_id=454596179]
+[node name="SleepButton" type="Button" parent="." unique_id=454596179]
 z_index = 1000
-offset_left = -487.0
-offset_top = -686.0
-offset_right = 40.0
-offset_bottom = -336.0
-text = "Кровать "
+offset_left = -558.0
+offset_top = 30.0
+offset_right = 3.0
+offset_bottom = 463.0
+theme_override_styles/normal = ExtResource("1_00tp4")
+text = "
+"
 script = ExtResource("1_6uqi0")
-
-[node name="Button" type="Button" parent="Button" unique_id=832566409]
-z_index = 1000
-layout_mode = 0
-offset_left = 546.0
-offset_top = 18.0
-offset_right = 878.0
-offset_bottom = 243.0
-text = "Будильник"
-script = ExtResource("2_ppyta")
 
 [node name="Label" type="Label" parent="." unique_id=1167014568]
 offset_top = -307.0
@@ -74,5 +67,14 @@ z_index = 100
 position = Vector2(758, 130)
 texture = ExtResource("9_xersf")
 
-[connection signal="pressed" from="Button" to="Button" method="_on_pressed"]
-[connection signal="pressed" from="Button/Button" to="Button/Button" method="_on_pressed"]
+[node name="WakeUpButton" type="Button" parent="." unique_id=832566409]
+z_index = 1000
+offset_left = 15.0
+offset_top = 222.0
+offset_right = 203.0
+offset_bottom = 418.0
+theme_override_styles/normal = ExtResource("1_00tp4")
+script = ExtResource("2_ppyta")
+
+[connection signal="pressed" from="SleepButton" to="SleepButton" method="_on_pressed"]
+[connection signal="pressed" from="WakeUpButton" to="WakeUpButton" method="_on_pressed"]
