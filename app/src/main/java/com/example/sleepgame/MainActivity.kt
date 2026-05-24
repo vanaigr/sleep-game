@@ -2,14 +2,13 @@ package com.example.sleepgame
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.Activity
-import android.app.Application
 import android.app.Dialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
@@ -18,14 +17,13 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
-import android.widget.Button
 import android.widget.RemoteViews
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.database.getIntOrNull
+import androidx.fragment.app.DialogFragment
 import com.example.sleepgame.MainActivity.Companion.CHANNEL_ID
 import com.example.sleepgame.MainActivity.Companion.sleepControlsNotificationId
 import org.godotengine.godot.Dictionary
@@ -35,11 +33,9 @@ import org.godotengine.godot.GodotHost
 import org.godotengine.godot.plugin.GodotPlugin
 import org.godotengine.godot.plugin.SignalInfo
 import org.godotengine.godot.plugin.UsedByGodot
-import java.lang.ref.WeakReference
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
-import kotlin.math.roundToInt
 
 class MainActivity: AppCompatActivity(), GodotHost {
     private lateinit var godotFragment: GodotFragment
@@ -75,7 +71,7 @@ class MainActivity: AppCompatActivity(), GodotHost {
                 .commitNowAllowingStateLoss()
         }
 
-        registerActivityLifecycleCallbacks(MainActivityTracker)
+        MainActivityTracker.attach(this)
     }
 
     override fun onResume() {
@@ -335,37 +331,20 @@ fun sleepQualityUpdate() {
     }
 
     activity.runOnUiThread {
-        val db = Database(activity).db
+        val fm = activity.supportFragmentManager
 
-        val dialog = Dialog(activity)
-        dialog.setContentView(R.layout.sleep_quality)
+        val oldDialog = fm.findFragmentByTag(SleepQualityDialogFragment.TAG) as? DialogFragment
+        oldDialog?.dismiss()
+        fm.executePendingTransactions()
 
-        val selectQuality = { quality: Int ->
-            db.execSQL(
-                "insert or replace into sleep_quality(period_id, quality) values(?, ?)",
-                arrayOf(curPeriodId, quality),
-            )
-            Log.d(TAG, "Inserted quality record for $curPeriodId: $quality")
-            dialog.dismiss()
-        }
-
-        val setupSelectionButton = { quality: Int, button: View ->
-            button.setOnClickListener { selectQuality(quality) }
-        }
-        setupSelectionButton(5, dialog.findViewById(R.id.ideal))
-        setupSelectionButton(4, dialog.findViewById(R.id.not_ideal))
-        setupSelectionButton(3, dialog.findViewById(R.id.not_good))
-        setupSelectionButton(2, dialog.findViewById(R.id.terrible))
-        setupSelectionButton(1, dialog.findViewById(R.id.no_sleep))
-        setupSelectionButton(0, dialog.findViewById(R.id.cancel))
-        
-        dialog.setOnCancelListener { selectQuality(0) }
-
-        dialog.show()
+        SleepQualityDialogFragment(curPeriodId)
+            .show(fm, SleepQualityDialogFragment.TAG)
     }
 
     Log.d(TAG, "Showing")
 }
+
+object MainActivityTracker : ActivityTracker<MainActivity>()
 
 fun sleepControlsHide(context: Context) {
     NotificationManagerCompat.from(context).cancel(sleepControlsNotificationId)
@@ -425,21 +404,43 @@ fun sleepControlsShow(context: Context) {
 }
 
 
-object MainActivityTracker : Application.ActivityLifecycleCallbacks {
-    private var current: WeakReference<Activity>? = null
+class SleepQualityDialogFragment(private val periodId: Int) : DialogFragment() {
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        val context = requireContext()
 
-    val resumedActivity: Activity? get() = current?.get()
+        val dialog = Dialog(context)
+        dialog.setContentView(R.layout.sleep_quality)
 
-    override fun onActivityResumed(activity: Activity) {
-        current = WeakReference(activity)
+        val setupSelectionButton = { quality: Int, button: View ->
+            button.setOnClickListener { selectQuality(quality) }
+        }
+        setupSelectionButton(5, dialog.findViewById(R.id.ideal))
+        setupSelectionButton(4, dialog.findViewById(R.id.not_ideal))
+        setupSelectionButton(3, dialog.findViewById(R.id.not_good))
+        setupSelectionButton(2, dialog.findViewById(R.id.terrible))
+        setupSelectionButton(1, dialog.findViewById(R.id.no_sleep))
+        setupSelectionButton(0, dialog.findViewById(R.id.cancel))
+
+        return dialog
     }
-    override fun onActivityPaused(activity: Activity) {
-        if (current?.get() === activity) current = null
+
+    override fun onCancel(dialog: DialogInterface) {
+        super.onCancel(dialog)
+        selectQuality(0)
     }
 
-    override fun onActivityCreated(a: Activity, b: Bundle?) {}
-    override fun onActivityStarted(a: Activity) {}
-    override fun onActivityStopped(a: Activity) {}
-    override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
-    override fun onActivityDestroyed(a: Activity) {}
+    private fun selectQuality(quality: Int) {
+        val db = Database(requireContext()).db
+
+        db.execSQL(
+            "insert or replace into sleep_quality(period_id, quality) values(?, ?)",
+            arrayOf(periodId, quality),
+        )
+        Log.d(TAG, "Inserted quality record for $periodId: $quality")
+        this.dismiss()
+    }
+
+    companion object {
+        const val TAG = "MyDialogFragment"
+    }
 }
