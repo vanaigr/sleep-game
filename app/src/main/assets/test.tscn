@@ -3,32 +3,76 @@
 [ext_resource type="Script" uid="uid://dvlfm2hfrlnhd" path="res://bed.gd" id="1_6uqi0"]
 [ext_resource type="Script" uid="uid://cict6ubrgcwhr" path="res://statsTable.gd" id="2_6uqi0"]
 [ext_resource type="Script" uid="uid://0iov6wr84lb1" path="res://alarmClock.gd" id="2_ppyta"]
+[ext_resource type="Texture2D" uid="uid://cwftyhqhltel8" path="res://graphics/Main screen/board.png" id="4_ykrsh"]
+[ext_resource type="Texture2D" uid="uid://ct5au7xtsqcqw" path="res://graphics/Main screen/background - main screen.png" id="5_g14j6"]
+[ext_resource type="Texture2D" uid="uid://dnq73iid64lod" path="res://graphics/Main screen/bed.png" id="6_g14j6"]
+[ext_resource type="Texture2D" uid="uid://cgsudf526n4vs" path="res://graphics/Main screen/alarm.png" id="7_ehkex"]
+[ext_resource type="Texture2D" uid="uid://bsql1omoxqqmn" path="res://graphics/Main screen/spider.png" id="7_vbegm"]
+[ext_resource type="Texture2D" uid="uid://l2ffdul7dh0d" path="res://graphics/Main screen/fridge.png" id="9_xersf"]
 
 [node name="Node2D" type="Node2D" unique_id=1025946398]
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=28195255]
 
 [node name="Button" type="Button" parent="." unique_id=454596179]
-offset_left = -539.0
-offset_top = -817.0
-offset_right = -12.0
-offset_bottom = -467.0
+z_index = 1000
+offset_left = -487.0
+offset_top = -686.0
+offset_right = 40.0
+offset_bottom = -336.0
 text = "Кровать "
 script = ExtResource("1_6uqi0")
 
 [node name="Button" type="Button" parent="Button" unique_id=832566409]
+z_index = 1000
 layout_mode = 0
-offset_left = 728.0
-offset_top = 197.0
-offset_right = 1060.0
-offset_bottom = 422.0
+offset_left = 546.0
+offset_top = 18.0
+offset_right = 878.0
+offset_bottom = 243.0
 text = "Будильник"
 script = ExtResource("2_ppyta")
 
 [node name="Label" type="Label" parent="." unique_id=1167014568]
+offset_top = -307.0
 offset_right = 529.0
-offset_bottom = 540.0
+offset_bottom = 233.0
 script = ExtResource("2_6uqi0")
+
+[node name="BackgroundMainScreen" type="Sprite2D" parent="." unique_id=728432563]
+z_index = 10
+position = Vector2(3, -4)
+scale = Vector2(0.35966668, 0.35966668)
+texture = ExtResource("5_g14j6")
+
+[node name="Bed" type="Sprite2D" parent="." unique_id=210157244]
+z_index = 100
+position = Vector2(-268.56677, 317.75)
+scale = Vector2(1.5687023, 1.5687023)
+texture = ExtResource("6_g14j6")
+
+[node name="Spider" type="Sprite2D" parent="." unique_id=1847919842]
+z_index = 1000
+position = Vector2(267, 456)
+scale = Vector2(0.108456984, 0.108456984)
+texture = ExtResource("7_vbegm")
+
+[node name="Alarm" type="Sprite2D" parent="." unique_id=474374172]
+z_index = 100
+position = Vector2(110, 315)
+scale = Vector2(0.1962435, 0.1962435)
+texture = ExtResource("7_ehkex")
+
+[node name="Board" type="Sprite2D" parent="." unique_id=1889345528]
+z_index = 100
+position = Vector2(249, -76)
+scale = Vector2(0.3674464, 0.3674464)
+texture = ExtResource("4_ykrsh")
+
+[node name="Fridge" type="Sprite2D" parent="." unique_id=860807055]
+z_index = 100
+position = Vector2(758, 130)
+texture = ExtResource("9_xersf")
 
 [connection signal="pressed" from="Button" to="Button" method="_on_pressed"]
 [connection signal="pressed" from="Button/Button" to="Button/Button" method="_on_pressed"]
