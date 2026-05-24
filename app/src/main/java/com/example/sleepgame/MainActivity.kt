@@ -340,15 +340,17 @@ fun sleepQualityUpdate() {
         val dialog = Dialog(activity)
         dialog.setContentView(R.layout.sleep_quality)
 
+        val selectQuality = { quality: Int ->
+            db.execSQL(
+                "insert or replace into sleep_quality(period_id, quality) values(?, ?)",
+                arrayOf(curPeriodId, quality),
+            )
+            Log.d(TAG, "Inserted quality record for $curPeriodId: $quality")
+            dialog.dismiss()
+        }
+
         val setupSelectionButton = { quality: Int, button: View ->
-            button.setOnClickListener {
-                db.execSQL(
-                    "insert or replace into sleep_quality(period_id, quality) values(?, ?)",
-                    arrayOf(curPeriodId, quality),
-                )
-                Log.d(TAG, "Inserted quality record for $curPeriodId: $quality")
-                dialog.dismiss()
-            }
+            button.setOnClickListener { selectQuality(quality) }
         }
         setupSelectionButton(5, dialog.findViewById(R.id.ideal))
         setupSelectionButton(4, dialog.findViewById(R.id.not_ideal))
@@ -356,6 +358,8 @@ fun sleepQualityUpdate() {
         setupSelectionButton(2, dialog.findViewById(R.id.terrible))
         setupSelectionButton(1, dialog.findViewById(R.id.no_sleep))
         setupSelectionButton(0, dialog.findViewById(R.id.cancel))
+        
+        dialog.setOnCancelListener { selectQuality(0) }
 
         dialog.show()
     }
