@@ -57,8 +57,8 @@ class Database {
         }
     }
 
-    fun startSleepPeriod(): Boolean {
-        val time = ZonedDateTime.now().format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
+    fun startSleepPeriod(recordedAt: ZonedDateTime): Boolean {
+        val time = recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         return db.transaction(exclusive = true) {
             val curPeriod = getCurrentSleepPeriod()
@@ -82,8 +82,8 @@ class Database {
         }
     }
 
-    fun endSleepPeriod(): Boolean {
-        val time = ZonedDateTime.now().format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
+    fun endSleepPeriod(recordedAt: ZonedDateTime): Boolean {
+        val time = recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         return db.transaction(exclusive = true) {
             val curPeriod = getCurrentSleepPeriod()
@@ -105,10 +105,10 @@ class Database {
             }
         }
     }
-    fun recordWakeUp() {
+    fun recordWakeUp(recordedAt: ZonedDateTime) {
         Log.d(TAG, "recordFallAsleep")
 
-        val time = ZonedDateTime.now().format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
+        val time = recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         db.transaction(exclusive = true) {
             val curPeriod = getCurrentSleepPeriod()
@@ -124,10 +124,10 @@ class Database {
         }
     }
 
-    fun recordSleepInterruption() {
+    fun recordSleepInterruption(recordedAt: ZonedDateTime) {
         Log.d(TAG, "recordSleepInterruption")
 
-        val time = ZonedDateTime.now().format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
+        val time = recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         db.transaction(exclusive = true) {
             val curPeriod = getCurrentSleepPeriod()
@@ -143,10 +143,10 @@ class Database {
         }
     }
 
-    fun recordFallAsleep() {
+    fun recordFallAsleep(recordedAt: ZonedDateTime) {
         Log.d(TAG, "recordFallAsleep")
 
-        val time = ZonedDateTime.now().format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
+        val time = recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         db.transaction(exclusive = true) {
             val curPeriod = getCurrentSleepPeriod()

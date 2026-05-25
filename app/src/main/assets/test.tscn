@@ -12,6 +12,7 @@
 [ext_resource type="Texture2D" uid="uid://l2ffdul7dh0d" path="res://graphics/Main screen/fridge.png" id="9_xersf"]
 [ext_resource type="Script" uid="uid://dlpfsbvy64guj" path="res://elementResizer.gd" id="11_5tkv4"]
 [ext_resource type="Script" uid="uid://pmxpjfjfsu41" path="res://screenController.gd" id="11_77dp3"]
+[ext_resource type="Script" uid="uid://dnf2mqf4jqj20" path="res://debugToggle.gd" id="12_0m0f1"]
 
 [node name="Node2D" type="Node2D" unique_id=1025946398]
 
@@ -107,6 +108,33 @@ autoLeft = true
 autoRight = true
 autoBottom = true
 
+[node name="debugToggle" type="Button" parent="bedroom" unique_id=608502766 node_paths=PackedStringArray("input", "validIndicator")]
+offset_left = -544.0
+offset_top = -974.0
+offset_right = 541.0
+offset_bottom = -763.0
+text = "Дебаг"
+script = ExtResource("12_0m0f1")
+input = NodePath("../debugTime")
+validIndicator = NodePath("../debugValidIndicator")
+
+[node name="debugTime" type="LineEdit" parent="bedroom" unique_id=1325740229]
+z_index = 100
+offset_left = -545.0
+offset_top = -755.0
+offset_right = 414.0
+offset_bottom = -657.0
+theme_override_font_sizes/font_size = 32
+
+[node name="debugValidIndicator" type="Panel" parent="bedroom" unique_id=1590448905]
+z_index = 100
+anchors_preset = -1
+anchor_right = 0.296
+offset_left = 420.0
+offset_top = -751.0
+offset_right = 200.32
+offset_bottom = -657.0
+
 [node name="cellar" type="Node" parent="." unique_id=1936753507]
 
 [node name="BackgroundMainScreen3" type="Sprite2D" parent="cellar" unique_id=539751400]
@@ -149,4 +177,5 @@ camera = NodePath("../mainCamera")
 [connection signal="pressed" from="bedroom/SleepButton" to="bedroom/SleepButton" method="_on_pressed"]
 [connection signal="pressed" from="bedroom/WakeUpButton" to="bedroom/WakeUpButton" method="_on_pressed"]
 [connection signal="pressed" from="bedroom/bedroomToCellar" to="ScreenController" method="toCellar"]
+[connection signal="pressed" from="bedroom/debugToggle" to="bedroom/debugToggle" method="_on_pressed"]
 [connection signal="pressed" from="cellar/cellarToBedroom" to="ScreenController" method="toBedroom"]

@@ -30,18 +30,22 @@ import org.godotengine.godot.Dictionary
 import org.godotengine.godot.Godot
 import org.godotengine.godot.GodotFragment
 import org.godotengine.godot.GodotHost
+import org.godotengine.godot.error.Error
 import org.godotengine.godot.plugin.GodotPlugin
 import org.godotengine.godot.plugin.SignalInfo
 import org.godotengine.godot.plugin.UsedByGodot
 import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 
 class MainActivity: AppCompatActivity(), GodotHost {
     private lateinit var godotFragment: GodotFragment
     private var bridgePlugin: BridgePlugin? = null
+
+    var overrideTime: ZonedDateTime? = null
 
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -221,7 +225,7 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
 
         if(latestInitialFallAsleep == null || wakeUp == null) return null
 
-        val currentTimezone = ZonedDateTime.now().zone
+        val currentTimezone = getCurrentTime().zone
 
         val result = Dictionary()
         result["duration"] = durationSecToString(totalSleepDuration.seconds)
@@ -265,14 +269,39 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
     @UsedByGodot
     fun clickBed() {
         val db = Database(context)
-        db.startSleepPeriod()
+        db.startSleepPeriod(getCurrentTime())
         sleepControlsUpdate(activity ?: context)
     }
     @UsedByGodot
     fun clickAlarmClock() {
         val db = Database(context)
-        db.endSleepPeriod()
+        db.endSleepPeriod(getCurrentTime())
         sleepControlsUpdate(activity ?: context)
+    }
+
+    @UsedByGodot
+    fun _debugGetCurrentTime(): String {
+        return ZonedDateTime.now().truncatedTo(ChronoUnit.SECONDS).format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
+    }
+
+    @UsedByGodot
+    fun _debugSetCurrentTime(time: String, debugging: Boolean): Boolean/*is time valid*/ {
+        val parsedTime = try {
+            ZonedDateTime.parse(time)
+        } catch (e: Exception) {
+            null
+        }
+
+        if(debugging) {
+            if (parsedTime != null) {
+                MainActivityTracker.resumedActivity?.overrideTime = parsedTime
+            }
+        }
+        else {
+            MainActivityTracker.resumedActivity?.overrideTime = null
+        }
+
+        return parsedTime != null
     }
 }
 
@@ -293,15 +322,15 @@ class SleepNotificationActionReceiver : BroadcastReceiver() {
         val db = Database(context)
         when (intent.action) {
             actionRecordWakeUp -> {
-                db.recordWakeUp()
+                db.recordWakeUp(getCurrentTime())
                 sleepControlsUpdate(context)
             }
             actionRecordSleepInterruption -> {
-                db.recordSleepInterruption()
+                db.recordSleepInterruption(getCurrentTime())
                 sleepControlsUpdate(context)
             }
             actionRecordFallAsleep -> {
-                db.recordFallAsleep()
+                db.recordFallAsleep(getCurrentTime())
                 sleepControlsUpdate(context)
             }
         }
@@ -483,4 +512,8 @@ class SleepQualityDialogFragment(private val periodId: Int) : DialogFragment() {
     companion object {
         const val TAG = "MyDialogFragment"
     }
+}
+
+fun getCurrentTime(): ZonedDateTime {
+    return MainActivityTracker.resumedActivity?.overrideTime ?: ZonedDateTime.now()
 }
