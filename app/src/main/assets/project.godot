@@ -22,7 +22,7 @@ Database="*uid://bd2b6sreskeo4"
 [display]
 
 window/size/viewport_width=1080
-window/size/viewport_height=2280
+window/size/viewport_height=1920
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=1
