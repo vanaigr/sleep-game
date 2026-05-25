@@ -174,8 +174,8 @@ class Database {
         }
 
         val curPeriodEnded = db.rawQuery(
-            "select count(*) from sleep_records where period_id = ? and type = ?",
-            arrayOf("" + curPeriodId, "period_end")
+            "select count(*) from sleep_records where period_id = ? and type in (?, ?)",
+            arrayOf("" + curPeriodId, "wake_up", "period_end")
         ).use {
             it.moveToNext()
             it.getLong(0) != 0L
