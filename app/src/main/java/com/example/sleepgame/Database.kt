@@ -162,6 +162,24 @@ class Database {
         }
     }
 
+    fun getAllRecordsForPeriod(periodId: Int): MutableList<SleepRecord> {
+        return db.rawQuery(
+            "select type, recorded_time from sleep_records where period_id = ?",
+            arrayOf("" + periodId)
+        ).use {
+            val result = mutableListOf<SleepRecord>()
+            while(it.moveToNext()) {
+                result.add(SleepRecord(
+                    it.getString(0),
+                    ZonedDateTime.parse(it.getString(1))
+                ))
+            }
+            result
+        }
+    }
+
+    data class SleepRecord(val type: String, val recordedTime: ZonedDateTime)
+
     data class SleepPeriod(val id: Int, val ended: Boolean)
 
     fun getCurrentSleepPeriod(): SleepPeriod {

@@ -44,10 +44,14 @@ theme_override_styles/pressed = ExtResource("1_00tp4")
 theme_override_styles/hover = ExtResource("1_00tp4")
 script = ExtResource("2_ppyta")
 
-[node name="Label" type="Label" parent="bedroom" unique_id=1167014568]
-offset_top = -307.0
-offset_right = 529.0
-offset_bottom = 233.0
+[node name="StatsLabel" type="Label" parent="bedroom" unique_id=1167014568]
+z_index = 100
+offset_left = 107.0
+offset_top = -275.0
+offset_right = 391.0
+offset_bottom = 127.0
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "abobababob"
 script = ExtResource("2_6uqi0")
 
 [node name="Camera" type="Camera2D" parent="bedroom" unique_id=77644272]
@@ -55,7 +59,7 @@ position = Vector2(0, -18)
 
 [node name="BackgroundMainScreen" type="Sprite2D" parent="bedroom" unique_id=728432563]
 z_index = 10
-position = Vector2(3, -4)
+position = Vector2(-18, -7)
 scale = Vector2(0.35966668, 0.35966668)
 texture = ExtResource("5_g14j6")
 
@@ -78,7 +82,7 @@ scale = Vector2(0.1962435, 0.1962435)
 texture = ExtResource("7_ehkex")
 
 [node name="Board" type="Sprite2D" parent="bedroom" unique_id=1889345528]
-z_index = 100
+z_index = 10
 position = Vector2(249, -76)
 scale = Vector2(0.3674464, 0.3674464)
 texture = ExtResource("4_ykrsh")

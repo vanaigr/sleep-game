@@ -33,6 +33,8 @@ import org.godotengine.godot.GodotHost
 import org.godotengine.godot.plugin.GodotPlugin
 import org.godotengine.godot.plugin.SignalInfo
 import org.godotengine.godot.plugin.UsedByGodot
+import java.time.Duration
+import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
@@ -151,24 +153,6 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
         }
         if(lastCompletedPeriod == null) return null
 
-        val latestFallAsleep =  db.db.rawQuery(
-            "select recorded_time from sleep_records where period_id = ? and type in (?, ?) order by id desc limit 1",
-            arrayOf("" + lastCompletedPeriod, "period_begin", "fall_asleep"),
-        ).use {
-            if(!it.moveToNext()) null
-            else it.getString(0)
-        }
-
-        val earliestWakeUp = db.db.rawQuery(
-            "select recorded_time from sleep_records where period_id = ? and type in (?, ?) order by id limit 1",
-            arrayOf("" + lastCompletedPeriod, "period_end", "wake_up"),
-        ).use {
-            if(!it.moveToNext()) null
-            else it.getString(0)
-        }
-
-        if(latestFallAsleep == null || earliestWakeUp == null) return null
-
         val quality = db.db.rawQuery(
             "select quality from sleep_quality where period_id = ? limit 1",
             arrayOf("" + lastCompletedPeriod),
@@ -177,14 +161,70 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
             else it.getInt(0)
         }
 
-        val begin = ZonedDateTime.parse(latestFallAsleep)
-        val end = ZonedDateTime.parse(earliestWakeUp)
-        val sleepDuration = java.time.Duration.between(begin, end).seconds
+        val records = db.getAllRecordsForPeriod(lastCompletedPeriod)
+        records.sortWith { a, b -> a.recordedTime.compareTo(b.recordedTime) }
 
-        val timezone = ZonedDateTime.now().zone
+        val minimumSleepTime = Duration.ofMinutes(10)
+        val timeToFallAsleep = Duration.ofMinutes(15)
+
+        var totalSleepDuration = Duration.ZERO
+        var lastFallAsleepTime: Instant? = null
+        var initialFallAsleepPhase = true // Only "period_begin" or "fall_asleep" were seen before
+        var latestInitialFallAsleep: ZonedDateTime? = null
+        var wakeUp: ZonedDateTime? = null
+
+        val accumulateSleepUntil = fun(until: Instant) {
+            val fallAsleep = lastFallAsleepTime
+            if(fallAsleep == null) {
+                Log.w(MainActivity.TAG, "Invalid state at $until")
+                return
+            }
+
+            val begin = fallAsleep + timeToFallAsleep
+            val sleepTime = Duration.between(begin, until)
+            if(sleepTime < minimumSleepTime) return
+
+            totalSleepDuration += sleepTime
+        }
+
+        for(record in records) {
+            when(record.type) {
+                "period_begin", "fall_asleep" -> {
+                    if(initialFallAsleepPhase) {
+                        lastFallAsleepTime = record.recordedTime.toInstant()
+                        latestInitialFallAsleep = record.recordedTime
+                    }
+                    else {
+                        val until = record.recordedTime.toInstant()
+                        accumulateSleepUntil(until)
+                        lastFallAsleepTime = until
+                    }
+                }
+                "interruption" -> {
+                    initialFallAsleepPhase = false
+                    val until = record.recordedTime.toInstant()
+                    accumulateSleepUntil(until)
+                    lastFallAsleepTime = until
+                }
+                "wake_up", "period_end" -> {
+                    initialFallAsleepPhase = false
+                    wakeUp = record.recordedTime
+                    val until = record.recordedTime.toInstant()
+                    accumulateSleepUntil(until)
+                    break
+                }
+                else -> {
+                    Log.d(MainActivity.TAG, "Unknown record type $record")
+                }
+            }
+        }
+
+        if(latestInitialFallAsleep == null || wakeUp == null) return null
+
+        val currentTimezone = ZonedDateTime.now().zone
 
         val result = Dictionary()
-        result["duration"] = durationSecToString(sleepDuration)
+        result["duration"] = durationSecToString(totalSleepDuration.seconds)
         result["quality"] = when(quality) {
             1 -> "Не спал"
             2 -> "Ужасно"
@@ -193,8 +233,8 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
             5 -> "Замечательно"
             else -> "Не записано"
         }
-        result["begin_time"] = begin.toInstant().atZone(timezone).toLocalTime().truncatedTo(ChronoUnit.SECONDS).toString()
-        result["end_time"] = end.toInstant().atZone(timezone).toLocalTime().truncatedTo(ChronoUnit.SECONDS).toString()
+        result["begin_time"] = latestInitialFallAsleep.withZoneSameInstant(currentTimezone) .toLocalTime().truncatedTo(ChronoUnit.SECONDS).toString()
+        result["end_time"] = wakeUp.withZoneSameInstant(currentTimezone).toLocalTime().truncatedTo(ChronoUnit.SECONDS).toString()
 
         return result
     }
