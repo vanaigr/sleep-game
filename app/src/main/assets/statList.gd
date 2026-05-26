@@ -32,9 +32,9 @@ func _process(delta: float) -> void:
 		
 		var button := Button.new()
 		button.text = ""
-		#button.flat = true
-		#button.focus_mode = Control.FOCUS_NONE
-		#button.mouse_filter = Control.MOUSE_FILTER_STOP
+		button.flat = true
+		button.focus_mode = Control.FOCUS_NONE
+		button.mouse_filter = Control.MOUSE_FILTER_STOP
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		button.set_anchors_preset(Control.PRESET_FULL_RECT, true)
@@ -44,25 +44,25 @@ func _process(delta: float) -> void:
 		
 		var row := HBoxContainer.new()
 		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.custom_minimum_size.y = 40
+		row.custom_minimum_size.y = 100
 		row.add_theme_constant_override("separation", 20)
 		margin.add_child(row)
 
 		var text1 := Label.new()
 		text1.text = item["date"]
-		text1.add_theme_font_size_override("font_size", 30)
+		text1.add_theme_font_size_override("font_size", 40)
 		text1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		text1.custom_minimum_size.x = 0
 
 		var text2 := Label.new()
 		text2.text = item["quality"]
 		text2.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		text2.add_theme_font_size_override("font_size", 30)
+		text2.add_theme_font_size_override("font_size", 40)
 
 		var text3 := Label.new()
 		text3.text = item["duration"]
 		text3.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		text3.add_theme_font_size_override("font_size", 30)
+		text3.add_theme_font_size_override("font_size", 40)
 
 		row.add_child(text1)
 		row.add_child(text2)
