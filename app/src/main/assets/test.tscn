@@ -14,6 +14,7 @@
 [ext_resource type="Script" uid="uid://pmxpjfjfsu41" path="res://screenController.gd" id="11_77dp3"]
 [ext_resource type="Script" uid="uid://dnf2mqf4jqj20" path="res://debugToggle.gd" id="12_0m0f1"]
 [ext_resource type="Script" uid="uid://lgc0sefys42i" path="res://statList.gd" id="13_b0q6j"]
+[ext_resource type="Script" uid="uid://7aa7nyrchhgb" path="res://detailedStatsPopup.gd" id="14_mhym6"]
 
 [node name="Node2D" type="Node2D" unique_id=1025946398]
 
@@ -170,11 +171,56 @@ offset_top = 1019.0
 offset_right = 520.0
 offset_bottom = 2019.0
 
-[node name="VBoxContainer" type="VBoxContainer" parent="cellar/ScrollContainer" unique_id=156330710]
+[node name="VBoxContainer" type="VBoxContainer" parent="cellar/ScrollContainer" unique_id=156330710 node_paths=PackedStringArray("detailedStatsPopup")]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 script = ExtResource("13_b0q6j")
+detailedStatsPopup = NodePath("../../detailedStatsWindow")
+
+[node name="detailedStatsWindow" type="Control" parent="cellar" unique_id=634421286 node_paths=PackedStringArray("label")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 1367.0
+offset_top = 35.0
+offset_right = 1367.0
+offset_bottom = 35.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("14_mhym6")
+label = NodePath("Panel/Label")
+
+[node name="elementResizer" type="Node" parent="cellar/detailedStatsWindow" unique_id=1641646121 node_paths=PackedStringArray("cam")]
+script = ExtResource("11_5tkv4")
+cam = NodePath("../../../mainCamera")
+autoLeft = true
+autoRight = true
+autoTop = true
+autoBottom = true
+
+[node name="Panel" type="Panel" parent="cellar/detailedStatsWindow" unique_id=79424292]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Label" type="Label" parent="cellar/detailedStatsWindow/Panel" unique_id=986931593]
+layout_mode = 0
+offset_left = 25.0
+offset_top = 31.0
+offset_right = 65.0
+offset_bottom = 54.0
+
+[node name="Button" type="Button" parent="cellar/detailedStatsWindow/Panel" unique_id=1172253243]
+layout_mode = 0
+offset_left = 333.0
+offset_top = 301.0
+offset_right = 943.0
+offset_bottom = 649.0
 
 [node name="ScreenController" type="Node" parent="." unique_id=1010820754 node_paths=PackedStringArray("screens", "camera")]
 script = ExtResource("11_77dp3")
@@ -187,3 +233,4 @@ camera = NodePath("../mainCamera")
 [connection signal="pressed" from="bedroom/bedroomToCellar" to="ScreenController" method="toCellar"]
 [connection signal="pressed" from="bedroom/debugToggle" to="bedroom/debugToggle" method="_on_pressed"]
 [connection signal="pressed" from="cellar/cellarToBedroom" to="ScreenController" method="toBedroom"]
+[connection signal="pressed" from="cellar/detailedStatsWindow/Panel/Button" to="cellar/detailedStatsWindow" method="_on_button_pressed"]

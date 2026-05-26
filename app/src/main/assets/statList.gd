@@ -1,5 +1,7 @@
 extends VBoxContainer
 
+@export var detailedStatsPopup: DetailedStatsWindow
+
 var bridgePlugin := Engine.get_singleton("BridgePlugin")
 var lastVersion: Variant
 
@@ -17,18 +19,34 @@ func _process(delta: float) -> void:
 		child.queue_free()
 			
 	for item in newItems:
-		var child := MarginContainer.new()
-		child.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		child.add_theme_constant_override("margin_left", 12)
-		child.add_theme_constant_override("margin_right", 12)
-		child.add_theme_constant_override("margin_top", 6)
-		child.add_theme_constant_override("margin_bottom", 6)
-	
+		var forClick = MarginContainer.new()
+		forClick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		
+		var margin := MarginContainer.new()
+		margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		margin.add_theme_constant_override("margin_left", 12)
+		margin.add_theme_constant_override("margin_right", 12)
+		margin.add_theme_constant_override("margin_top", 6)
+		margin.add_theme_constant_override("margin_bottom", 6)
+		forClick.add_child(margin)
+		
+		var button := Button.new()
+		button.text = ""
+		#button.flat = true
+		#button.focus_mode = Control.FOCUS_NONE
+		#button.mouse_filter = Control.MOUSE_FILTER_STOP
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		button.set_anchors_preset(Control.PRESET_FULL_RECT, true)
+		button.mouse_filter = Control.MOUSE_FILTER_PASS
+		button.pressed.connect(func(): detailedStatsPopup.open_with_data({}))
+		forClick.add_child(button)
+		
 		var row := HBoxContainer.new()
 		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.custom_minimum_size.y = 40
 		row.add_theme_constant_override("separation", 20)
-		child.add_child(row)
+		margin.add_child(row)
 
 		var text1 := Label.new()
 		text1.text = item["date"]
@@ -49,5 +67,5 @@ func _process(delta: float) -> void:
 		row.add_child(text1)
 		row.add_child(text2)
 		row.add_child(text3)
-		
-		add_child(child)
+				
+		add_child(forClick)

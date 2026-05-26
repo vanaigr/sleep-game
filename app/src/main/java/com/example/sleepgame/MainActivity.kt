@@ -40,6 +40,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import kotlin.concurrent.atomics.AtomicReference
 import kotlin.math.abs
 
 class MainActivity: AppCompatActivity(), GodotHost {
@@ -76,6 +77,17 @@ class MainActivity: AppCompatActivity(), GodotHost {
             supportFragmentManager.beginTransaction()
                 .replace(R.id.godot_fragment_container, godotFragment)
                 .commitNowAllowingStateLoss()
+        }
+
+        // Cool engine. It exits, but doesn't think it's necessary to notify anyone
+        // So pressing back button just turns it into a glorified ImageView.
+        @Suppress("UNCHECKED_CAST")
+        (
+            godotFragment.godot::class.java.getDeclaredField("runOnTerminate")
+                .apply { isAccessible = true }
+                .get(godotFragment.godot) as java.util.concurrent.atomic.AtomicReference<Runnable>
+        ).set {
+            finish()
         }
 
         MainActivityTracker.attach(this)
