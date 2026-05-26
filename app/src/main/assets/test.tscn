@@ -15,6 +15,19 @@
 [ext_resource type="Script" uid="uid://dnf2mqf4jqj20" path="res://debugToggle.gd" id="12_0m0f1"]
 [ext_resource type="Script" uid="uid://lgc0sefys42i" path="res://statList.gd" id="13_b0q6j"]
 [ext_resource type="Script" uid="uid://7aa7nyrchhgb" path="res://detailedStatsPopup.gd" id="14_mhym6"]
+[ext_resource type="Script" uid="uid://ckleiwtlcm6or" path="res://sleepGraph.gd" id="15_a3se8"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_a3se8"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0.101960786, 0.101960786, 0.101960786, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+corner_detail = 5
 
 [node name="Node2D" type="Node2D" unique_id=1025946398]
 
@@ -178,7 +191,7 @@ size_flags_vertical = 3
 script = ExtResource("13_b0q6j")
 detailedStatsPopup = NodePath("../../detailedStatsWindow")
 
-[node name="detailedStatsWindow" type="Control" parent="cellar" unique_id=634421286 node_paths=PackedStringArray("label")]
+[node name="detailedStatsWindow" type="Control" parent="cellar" unique_id=634421286 node_paths=PackedStringArray("graph")]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -190,7 +203,7 @@ offset_bottom = 35.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("14_mhym6")
-label = NodePath("Panel/Label")
+graph = NodePath("Panel/Graph")
 
 [node name="elementResizer" type="Node" parent="cellar/detailedStatsWindow" unique_id=1641646121 node_paths=PackedStringArray("cam")]
 script = ExtResource("11_5tkv4")
@@ -201,26 +214,22 @@ autoTop = true
 autoBottom = true
 
 [node name="Panel" type="Panel" parent="cellar/detailedStatsWindow" unique_id=79424292]
+z_index = 200
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_a3se8")
 
-[node name="Label" type="Label" parent="cellar/detailedStatsWindow/Panel" unique_id=986931593]
-layout_mode = 0
-offset_left = 25.0
-offset_top = 31.0
-offset_right = 65.0
-offset_bottom = 54.0
-
-[node name="Button" type="Button" parent="cellar/detailedStatsWindow/Panel" unique_id=1172253243]
-layout_mode = 0
-offset_left = 333.0
-offset_top = 301.0
-offset_right = 943.0
-offset_bottom = 649.0
+[node name="Graph" type="Control" parent="cellar/detailedStatsWindow/Panel" unique_id=726906575]
+anchors_preset = 0
+offset_left = 36.0
+offset_top = 41.0
+offset_right = 1040.0
+offset_bottom = 466.0
+script = ExtResource("15_a3se8")
 
 [node name="ScreenController" type="Node" parent="." unique_id=1010820754 node_paths=PackedStringArray("screens", "camera")]
 script = ExtResource("11_77dp3")
@@ -233,4 +242,3 @@ camera = NodePath("../mainCamera")
 [connection signal="pressed" from="bedroom/bedroomToCellar" to="ScreenController" method="toCellar"]
 [connection signal="pressed" from="bedroom/debugToggle" to="bedroom/debugToggle" method="_on_pressed"]
 [connection signal="pressed" from="cellar/cellarToBedroom" to="ScreenController" method="toBedroom"]
-[connection signal="pressed" from="cellar/detailedStatsWindow/Panel/Button" to="cellar/detailedStatsWindow" method="_on_button_pressed"]

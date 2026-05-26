@@ -40,8 +40,9 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
-import kotlin.concurrent.atomics.AtomicReference
 import kotlin.math.abs
+import kotlin.math.floor
+import kotlin.math.round
 
 class MainActivity: AppCompatActivity(), GodotHost {
     private lateinit var godotFragment: GodotFragment
@@ -142,7 +143,7 @@ class MainActivity: AppCompatActivity(), GodotHost {
     }
 
     companion object {
-        val TAG = "Native"
+        private val TAG = "Native"
 
         val CHANNEL_ID = "sleep_channel_v2"
         val OLD_CHANNEL_IDS = arrayOf("sleep_channel")
@@ -152,10 +153,10 @@ class MainActivity: AppCompatActivity(), GodotHost {
 
 data class SleepPeriodInfo(val periodId: Int, val quality: Int, val records: MutableList<Database.SleepRecord>)
 
-fun calculateSleepPeriodStats(info: SleepPeriodInfo): Dictionary? {
-    val minimumSleepTime = Duration.ofMinutes(10)
-    val timeToFallAsleep = Duration.ofMinutes(15)
+val minimumSleepTime = Duration.ofMinutes(10)
+val timeToFallAsleep = Duration.ofMinutes(15)
 
+fun calculateSleepPeriodStats(info: SleepPeriodInfo): Dictionary? {
     var totalSleepDuration = Duration.ZERO
     var lastFallAsleepTime: Instant? = null
     var initialFallAsleepPhase = true // Only "period_begin" or "fall_asleep" were seen before
@@ -165,15 +166,15 @@ fun calculateSleepPeriodStats(info: SleepPeriodInfo): Dictionary? {
     val accumulateSleepUntil = fun(until: Instant) {
         val fallAsleep = lastFallAsleepTime
         if(fallAsleep == null) {
-            Log.w(MainActivity.TAG, "Invalid state at $until")
+            Log.w("calculateSleepPeriodStats", "Invalid state at $until")
             return
         }
 
         val begin = fallAsleep + timeToFallAsleep
         val sleepTime = Duration.between(begin, until)
-        if(sleepTime < minimumSleepTime) return
-
-        totalSleepDuration += sleepTime
+        if(sleepTime >= minimumSleepTime) {
+            totalSleepDuration += sleepTime
+        }
     }
 
     for(record in info.records) {
@@ -203,7 +204,7 @@ fun calculateSleepPeriodStats(info: SleepPeriodInfo): Dictionary? {
                 break
             }
             else -> {
-                Log.d(MainActivity.TAG, "Unknown record type $record")
+                Log.d("calculateSleepPeriodStats", "Unknown record type $record")
             }
         }
     }
@@ -232,12 +233,229 @@ fun calculateSleepPeriodStats(info: SleepPeriodInfo): Dictionary? {
     return result
 }
 
+data class SleepPeriodGraphData(
+    val latestInitialFallAsleep: ZonedDateTime?,
+    val wakeUp: ZonedDateTime?,
+    val nonSleepRanges: MutableList<Array<Instant>>,
+)
+
+fun calculateSleepPeriodGraphData(records: Iterable<Database.SleepRecord>): SleepPeriodGraphData {
+    val nonSleepRanges = mutableListOf<Array<Instant>>()
+
+    var totalSleepDuration = Duration.ZERO
+    var lastFallAsleepTime: Instant? = null
+    var initialFallAsleepPhase = true // Only "period_begin" or "fall_asleep" were seen before
+    var latestInitialFallAsleep: ZonedDateTime? = null
+    var wakeUp: ZonedDateTime? = null
+
+    val accumulateSleepUntil = fun(until: Instant) {
+        val fallAsleep = lastFallAsleepTime
+        if(fallAsleep == null) {
+            Log.w("calculateSleepPeriodNonSleepRanges", "Invalid state at $until")
+            return
+        }
+
+        val begin = fallAsleep + timeToFallAsleep
+        val sleepTime = Duration.between(begin, until)
+        if(sleepTime >= minimumSleepTime) {
+            totalSleepDuration += sleepTime
+            nonSleepRanges.add(arrayOf(until, until))
+        }
+        else {
+            nonSleepRanges.last()[1] = until
+        }
+    }
+
+    for(record in records) {
+        when(record.type) {
+            "period_begin", "fall_asleep" -> {
+                if(initialFallAsleepPhase) {
+                    lastFallAsleepTime = record.recordedTime.toInstant()
+                    latestInitialFallAsleep = record.recordedTime
+
+                    if(nonSleepRanges.isEmpty()) {
+                        nonSleepRanges.add(arrayOf(lastFallAsleepTime, lastFallAsleepTime))
+                    }
+                    else {
+                        nonSleepRanges.last()[1] = lastFallAsleepTime
+                    }
+                }
+                else {
+                    val until = record.recordedTime.toInstant()
+                    accumulateSleepUntil(until)
+                    lastFallAsleepTime = until
+                }
+            }
+            "interruption" -> {
+                initialFallAsleepPhase = false
+                val until = record.recordedTime.toInstant()
+                accumulateSleepUntil(until)
+                lastFallAsleepTime = until
+            }
+            "wake_up", "period_end" -> {
+                initialFallAsleepPhase = false
+                wakeUp = record.recordedTime
+                val until = record.recordedTime.toInstant()
+                accumulateSleepUntil(until)
+                break
+            }
+            else -> {
+                Log.d("calculateSleepPeriodNonSleepRanges", "Unknown record type $record")
+            }
+        }
+    }
+
+    return SleepPeriodGraphData(latestInitialFallAsleep, wakeUp, nonSleepRanges)
+}
+
+fun roundByHours(time: ZonedDateTime, roundByHours: Int, ceil: Boolean): ZonedDateTime {
+    val startOfDay = time.truncatedTo(ChronoUnit.DAYS)
+    val oldOffset = Duration.between(startOfDay, time)
+    val floorOffset = Duration.ofHours(oldOffset.toHours() / roundByHours * roundByHours)
+    val newOffset = run {
+        if(!ceil) floorOffset
+        else if(oldOffset == floorOffset) floorOffset
+        else floorOffset + Duration.ofHours(roundByHours.toLong())
+    }
+    return startOfDay.plus(newOffset)
+}
+
 class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
     companion object {
+        private val TAG = "BridgePlugin"
     }
 
     override fun getPluginName() = "BridgePlugin"
     override fun getPluginSignals() = setOf<SignalInfo>()
+
+    @UsedByGodot
+    fun getSleepPeriodGraph(periodId: Int, width: Float, tickWidth: Float): Dictionary? {
+        Log.d(TAG, "getSleepPeriodGraph")
+        val db = Database(context)
+
+        val records = db.getAllRecordsForPeriod(periodId)
+        records.sortWith { a, b -> a.recordedTime.compareTo(b.recordedTime) }
+        if(records.isEmpty()) {
+            Log.d(TAG, "No records for the given period")
+            return null
+        }
+
+        val padding = 4
+        val maxTicks = floor(width / (tickWidth + padding)).toInt()
+
+        val currentTimezone = getCurrentTime().zone
+        val begin = records[0].recordedTime.withZoneSameInstant(currentTimezone)
+        val end = records.last().recordedTime.withZoneSameInstant(currentTimezone)
+        val endInstant = end.toInstant()
+
+
+        var roundingHours = 1
+        var roundedBegin: ZonedDateTime
+        var roundedEnd: ZonedDateTime
+        var tickCount: Long
+        while(true) {
+            roundedBegin = roundByHours(begin, roundingHours, false)
+            val difference = Duration.between(roundedBegin, end)
+            var totalHours = difference.toHours()
+            if(difference != Duration.ofHours(totalHours)) totalHours++
+            tickCount = Math.ceilDiv(totalHours, roundingHours) + 1
+
+            if(tickCount <= maxTicks) break
+            if(roundingHours >= 24) break
+            roundingHours *= 2
+        }
+        roundedEnd = roundedBegin + Duration.ofHours((tickCount - 1) * roundingHours)
+        val totalSeconds = Duration.between(roundedBegin, roundedEnd).seconds.toDouble()
+        val roundedBeginInstant = roundedBegin.toInstant()
+
+        val graphData = calculateSleepPeriodGraphData(records)
+
+        val result = Dictionary()
+
+        val timeToX = fun(time: Instant): Double {
+            val factor = Duration.between(roundedBeginInstant, time).seconds.toDouble() / totalSeconds
+            return (padding + tickWidth) * 0.5 + factor * (width - padding - tickWidth)
+        }
+
+        result["tick_count"] = tickCount
+        for (tickI in 0 until tickCount) {
+            val time = roundedBegin + Duration.ofHours(tickI * roundingHours)
+            result["tick_${tickI}_label"] = "" + time.toLocalTime().hour
+            result["tick_${tickI}_position"] = timeToX(time.toInstant())
+        }
+
+        var nonSleepPolygonCount = 0
+        for(range in graphData.nonSleepRanges) {
+            val rangeBegin = range[0]
+            val rangeEnd = range[1]
+
+            var smoothEnd = rangeEnd + timeToFallAsleep
+            var smoothEndValue = 0.0
+            // NOTE: currently, last record is always a wake up/period end record,
+            // and this logic relies on that.
+            if(smoothEnd > endInstant) {
+                if(endInstant == rangeEnd) {
+                    smoothEndValue = 0.0
+                    smoothEnd = endInstant
+                }
+                else {
+                    smoothEndValue =
+                        Duration.between(rangeEnd, smoothEnd).seconds.toDouble() / Duration.between(
+                            rangeEnd,
+                            endInstant
+                        ).seconds.toDouble()
+                    smoothEnd = endInstant
+                }
+            }
+
+            val beginX = timeToX(rangeBegin)
+            val endX = timeToX(rangeEnd)
+            val smoothEndX = timeToX(smoothEnd)
+
+            val points = mutableListOf<Array<Double>>()
+            points.add(arrayOf(beginX, 0.0))
+            points.add(arrayOf(beginX, 1.0))
+            points.add(arrayOf(endX, 1.0))
+            points.add(arrayOf(smoothEndX, smoothEndValue))
+            if(smoothEndValue != 0.0) points.add(arrayOf(smoothEndX, 0.0))
+
+            var i = 0
+            while(i != points.size) {
+                val prev = if(i == 0) points.last() else points[i - 1]
+                val cur = points[i]
+                if(abs(prev[0] - cur[0]) < 1 && abs(prev[1] - cur[1]) < 0.001) {
+                    points.removeAt(i)
+                }
+                else {
+                    i++
+                }
+            }
+
+            if(points.size < 3) continue
+
+            for((i, point) in points.withIndex()) {
+                result["non_sleep_point_${nonSleepPolygonCount}_${i}_x"] = point[0]
+                result["non_sleep_point_${nonSleepPolygonCount}_${i}_y"] = point[1]
+            }
+            result["non_sleep_polygon_${nonSleepPolygonCount}_point_count"] = points.size
+            nonSleepPolygonCount++
+        }
+        result["non_sleep_polygon_count"] = nonSleepPolygonCount
+
+        if(graphData.latestInitialFallAsleep != null) {
+            result["fall_asleep_position"] = timeToX(graphData.latestInitialFallAsleep.toInstant())
+            result["fall_asleep_label"] = graphData.latestInitialFallAsleep.withZoneSameInstant(currentTimezone).toLocalTime()
+                .truncatedTo(ChronoUnit.MINUTES).toString()
+        }
+        if(graphData.wakeUp != null) {
+            result["wake_up_position"] = timeToX(graphData.wakeUp.toInstant())
+            result["wake_up_label"] = graphData.wakeUp.withZoneSameInstant(currentTimezone).toLocalTime()
+                .truncatedTo(ChronoUnit.MINUTES).toString()
+        }
+
+        Log.d(TAG, "done")
+        return result
+    }
 
     @UsedByGodot
     fun getLastCompletePeriodStats(): Dictionary? {

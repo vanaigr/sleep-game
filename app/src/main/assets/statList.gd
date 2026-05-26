@@ -39,7 +39,7 @@ func _process(delta: float) -> void:
 		button.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		button.set_anchors_preset(Control.PRESET_FULL_RECT, true)
 		button.mouse_filter = Control.MOUSE_FILTER_PASS
-		button.pressed.connect(func(): detailedStatsPopup.open_with_data({}))
+		button.pressed.connect(func(): detailedStatsPopup.open_with_data({ "periodId": item["period_id"] }))
 		forClick.add_child(button)
 		
 		var row := HBoxContainer.new()
