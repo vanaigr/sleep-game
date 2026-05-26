@@ -1,8 +1,16 @@
 extends VBoxContainer
 
 var bridgePlugin := Engine.get_singleton("BridgePlugin")
+var lastVersion: Variant
 
 func _process(delta: float) -> void:
+	# TODO: instead of this, save all relevant data (e.g. also current timezone and locale)
+	# and then check it in `getAllPeriodStats()` instead
+	var version = bridgePlugin.getSleepDataVersion()
+	if version == lastVersion:
+		return
+	lastVersion = version
+
 	var newItems = bridgePlugin.getAllPeriodsStats()
 	
 	for child in get_children():

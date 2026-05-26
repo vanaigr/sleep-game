@@ -255,6 +255,11 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
     }
 
     @UsedByGodot
+    fun getSleepDataVersion(): Long {
+        return Database(context).getSleepDataVersion()
+    }
+
+    @UsedByGodot
     fun getAllPeriodsStats(): Array<Dictionary> {
         val db = Database(context)
 
@@ -537,13 +542,8 @@ class SleepQualityDialogFragment(private val periodId: Int) : DialogFragment() {
     }
 
     private fun selectQuality(quality: Int) {
-        val db = Database(requireContext()).db
-
-        db.execSQL(
-            "insert or replace into sleep_quality(period_id, quality) values(?, ?)",
-            arrayOf(periodId, quality),
-        )
-        Log.d(TAG, "Inserted quality record for $periodId: $quality")
+        val db = Database(requireContext())
+        db.setSleepQuality(periodId, quality)
         this.dismiss()
     }
 

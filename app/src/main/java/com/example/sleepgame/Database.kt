@@ -54,7 +54,23 @@ class Database {
                 )
                 db.version = 2
             }
+            if(db.version == 2) {
+                db.execSQL("create table sleep_data_version(version integer not null)")
+                db.execSQL("insert into sleep_data_version(version) values (1)")
+                db.version = 3
+            }
         }
+    }
+
+    fun getSleepDataVersion(): Long {
+        return db.rawQuery("select version from sleep_data_version", arrayOf()).use {
+            it.moveToNext()
+            it.getLong(0)
+        }
+    }
+
+    fun bumpSleepDataVersion() {
+        db.execSQL("update sleep_data_version set version = version + 1")
     }
 
     fun startSleepPeriod(recordedAt: ZonedDateTime): Boolean {
@@ -72,6 +88,7 @@ class Database {
                     "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
                     arrayOf(id, "period_begin", time)
                 )
+                bumpSleepDataVersion()
 
                 true
             }
@@ -96,6 +113,7 @@ class Database {
                     "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
                     arrayOf(curPeriod.id, "period_end", time)
                 )
+                bumpSleepDataVersion()
 
                 true
             }
@@ -121,6 +139,7 @@ class Database {
                 "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
                 arrayOf(curPeriod.id, "wake_up", time)
             )
+            bumpSleepDataVersion()
         }
     }
 
@@ -140,6 +159,7 @@ class Database {
                 "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
                 arrayOf(curPeriod.id, "interruption", time)
             )
+            bumpSleepDataVersion()
         }
     }
 
@@ -159,7 +179,17 @@ class Database {
                 "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
                 arrayOf(curPeriod.id, "fall_asleep", time)
             )
+            bumpSleepDataVersion()
         }
+    }
+
+    fun setSleepQuality(periodId: Int, quality: Int) {
+        db.execSQL(
+            "insert or replace into sleep_quality(period_id, quality) values(?, ?)",
+            arrayOf(periodId, quality),
+        )
+        bumpSleepDataVersion()
+        Log.d(TAG, "Inserted quality record for $periodId: $quality")
     }
 
     fun getAllRecords(): MutableList<SleepRecord> {
