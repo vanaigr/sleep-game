@@ -191,7 +191,7 @@ size_flags_vertical = 3
 script = ExtResource("13_b0q6j")
 detailedStatsPopup = NodePath("../../detailedStatsWindow")
 
-[node name="detailedStatsWindow" type="Control" parent="cellar" unique_id=634421286 node_paths=PackedStringArray("graph")]
+[node name="detailedStatsWindow" type="Control" parent="cellar" unique_id=634421286 node_paths=PackedStringArray("nightName", "graph", "nightInterruptions", "sleepDuration", "sleepQuality")]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -203,7 +203,11 @@ offset_bottom = 35.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("14_mhym6")
+nightName = NodePath("Panel/nightName")
 graph = NodePath("Panel/Graph")
+nightInterruptions = NodePath("Panel/nightInterruptions")
+sleepDuration = NodePath("Panel/sleepDuration")
+sleepQuality = NodePath("Panel/sleepQuality")
 
 [node name="elementResizer" type="Node" parent="cellar/detailedStatsWindow" unique_id=1641646121 node_paths=PackedStringArray("cam")]
 script = ExtResource("11_5tkv4")
@@ -223,13 +227,45 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_a3se8")
 
+[node name="nightName" type="Label" parent="cellar/detailedStatsWindow/Panel" unique_id=2093198272]
+layout_mode = 0
+offset_left = 37.0
+offset_top = 29.0
+offset_right = 1036.0
+offset_bottom = 100.0
+theme_override_font_sizes/font_size = 32
+
 [node name="Graph" type="Control" parent="cellar/detailedStatsWindow/Panel" unique_id=726906575]
 anchors_preset = 0
 offset_left = 36.0
-offset_top = 41.0
+offset_top = 152.0
 offset_right = 1040.0
-offset_bottom = 466.0
+offset_bottom = 577.0
 script = ExtResource("15_a3se8")
+
+[node name="nightInterruptions" type="Label" parent="cellar/detailedStatsWindow/Panel" unique_id=1572639642]
+layout_mode = 0
+offset_left = 37.0
+offset_top = 577.0
+offset_right = 1036.0
+offset_bottom = 648.0
+theme_override_font_sizes/font_size = 32
+
+[node name="sleepDuration" type="Label" parent="cellar/detailedStatsWindow/Panel" unique_id=1882698892]
+layout_mode = 0
+offset_left = 37.0
+offset_top = 690.0
+offset_right = 1036.0
+offset_bottom = 761.0
+theme_override_font_sizes/font_size = 32
+
+[node name="sleepQuality" type="Label" parent="cellar/detailedStatsWindow/Panel" unique_id=1825494483]
+layout_mode = 0
+offset_left = 37.0
+offset_top = 814.0
+offset_right = 1036.0
+offset_bottom = 885.0
+theme_override_font_sizes/font_size = 32
 
 [node name="ScreenController" type="Node" parent="." unique_id=1010820754 node_paths=PackedStringArray("screens", "camera")]
 script = ExtResource("11_77dp3")

@@ -162,6 +162,7 @@ fun calculateSleepPeriodStats(info: SleepPeriodInfo): Dictionary? {
     var initialFallAsleepPhase = true // Only "period_begin" or "fall_asleep" were seen before
     var latestInitialFallAsleep: ZonedDateTime? = null
     var wakeUp: ZonedDateTime? = null
+    var interruptionCount = 0
 
     val accumulateSleepUntil = fun(until: Instant) {
         val fallAsleep = lastFallAsleepTime
@@ -185,12 +186,14 @@ fun calculateSleepPeriodStats(info: SleepPeriodInfo): Dictionary? {
                     latestInitialFallAsleep = record.recordedTime
                 }
                 else {
+                    interruptionCount++
                     val until = record.recordedTime.toInstant()
                     accumulateSleepUntil(until)
                     lastFallAsleepTime = until
                 }
             }
             "interruption" -> {
+                interruptionCount++
                 initialFallAsleepPhase = false
                 val until = record.recordedTime.toInstant()
                 accumulateSleepUntil(until)
@@ -229,6 +232,7 @@ fun calculateSleepPeriodStats(info: SleepPeriodInfo): Dictionary? {
     result["date"] = wakeUp.withZoneSameInstant(currentTimezone).toLocalDate().format(
         DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(Locale.getDefault())
     )
+    result["interruption_count"] = interruptionCount
 
     return result
 }

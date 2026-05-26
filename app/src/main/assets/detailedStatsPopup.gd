@@ -1,13 +1,21 @@
 extends Control
 class_name DetailedStatsWindow
 
+@export var nightName: Label
 @export var graph: SleepGraph
+@export var nightInterruptions: Label
+@export var sleepDuration: Label
+@export var sleepQuality: Label
 
 func _ready() -> void:
 	close()
 
 func open_with_data(data: Dictionary) -> void:
-	graph.periodId = data["periodId"]
+	nightName.text = "Ночь на " + str(data["date"])
+	graph.periodId = data["period_id"]
+	nightInterruptions.text = "Кол-во ночных пробуждений: " + str(data["interruption_count"])
+	sleepDuration.text = "Время сна: " + str(data["duration"])
+	sleepQuality.text = "Качество сна: " + str(data["quality"])
 	open()
 
 func _on_button_pressed() -> void:
