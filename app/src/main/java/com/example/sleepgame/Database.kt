@@ -162,6 +162,30 @@ class Database {
         }
     }
 
+    fun getAllRecords(): MutableList<SleepRecord> {
+        return db.rawQuery("select period_id, type, recorded_time from sleep_records", arrayOf()).use {
+            val result = mutableListOf<SleepRecord>()
+            while(it.moveToNext()) {
+                result.add(SleepRecord(
+                    it.getInt(0),
+                    it.getString(1),
+                    ZonedDateTime.parse(it.getString(2))
+                ))
+            }
+            result
+        }
+    }
+
+    fun getQualityByPeriodId(): Map<Int, Int> {
+        return db.rawQuery("select period_id, quality from sleep_quality", arrayOf()).use {
+            val result = HashMap<Int, Int>()
+            while(it.moveToNext()) {
+                result[it.getInt(0)] = it.getInt(1)
+            }
+            result
+        }
+    }
+
     fun getAllRecordsForPeriod(periodId: Int): MutableList<SleepRecord> {
         return db.rawQuery(
             "select type, recorded_time from sleep_records where period_id = ?",
@@ -170,6 +194,7 @@ class Database {
             val result = mutableListOf<SleepRecord>()
             while(it.moveToNext()) {
                 result.add(SleepRecord(
+                    periodId,
                     it.getString(0),
                     ZonedDateTime.parse(it.getString(1))
                 ))
@@ -178,7 +203,7 @@ class Database {
         }
     }
 
-    data class SleepRecord(val type: String, val recordedTime: ZonedDateTime)
+    data class SleepRecord(val periodId: Int, val type: String, val recordedTime: ZonedDateTime)
 
     data class SleepPeriod(val id: Int, val ended: Boolean)
 

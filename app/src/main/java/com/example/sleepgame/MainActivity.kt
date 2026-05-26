@@ -30,7 +30,6 @@ import org.godotengine.godot.Dictionary
 import org.godotengine.godot.Godot
 import org.godotengine.godot.GodotFragment
 import org.godotengine.godot.GodotHost
-import org.godotengine.godot.error.Error
 import org.godotengine.godot.plugin.GodotPlugin
 import org.godotengine.godot.plugin.SignalInfo
 import org.godotengine.godot.plugin.UsedByGodot
@@ -38,7 +37,9 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.time.temporal.ChronoUnit
+import java.util.Locale
 import kotlin.math.abs
 
 class MainActivity: AppCompatActivity(), GodotHost {
@@ -137,6 +138,88 @@ class MainActivity: AppCompatActivity(), GodotHost {
     }
 }
 
+data class SleepPeriodInfo(val periodId: Int, val quality: Int, val records: MutableList<Database.SleepRecord>)
+
+fun calculateSleepPeriodStats(info: SleepPeriodInfo): Dictionary? {
+    val minimumSleepTime = Duration.ofMinutes(10)
+    val timeToFallAsleep = Duration.ofMinutes(15)
+
+    var totalSleepDuration = Duration.ZERO
+    var lastFallAsleepTime: Instant? = null
+    var initialFallAsleepPhase = true // Only "period_begin" or "fall_asleep" were seen before
+    var latestInitialFallAsleep: ZonedDateTime? = null
+    var wakeUp: ZonedDateTime? = null
+
+    val accumulateSleepUntil = fun(until: Instant) {
+        val fallAsleep = lastFallAsleepTime
+        if(fallAsleep == null) {
+            Log.w(MainActivity.TAG, "Invalid state at $until")
+            return
+        }
+
+        val begin = fallAsleep + timeToFallAsleep
+        val sleepTime = Duration.between(begin, until)
+        if(sleepTime < minimumSleepTime) return
+
+        totalSleepDuration += sleepTime
+    }
+
+    for(record in info.records) {
+        when(record.type) {
+            "period_begin", "fall_asleep" -> {
+                if(initialFallAsleepPhase) {
+                    lastFallAsleepTime = record.recordedTime.toInstant()
+                    latestInitialFallAsleep = record.recordedTime
+                }
+                else {
+                    val until = record.recordedTime.toInstant()
+                    accumulateSleepUntil(until)
+                    lastFallAsleepTime = until
+                }
+            }
+            "interruption" -> {
+                initialFallAsleepPhase = false
+                val until = record.recordedTime.toInstant()
+                accumulateSleepUntil(until)
+                lastFallAsleepTime = until
+            }
+            "wake_up", "period_end" -> {
+                initialFallAsleepPhase = false
+                wakeUp = record.recordedTime
+                val until = record.recordedTime.toInstant()
+                accumulateSleepUntil(until)
+                break
+            }
+            else -> {
+                Log.d(MainActivity.TAG, "Unknown record type $record")
+            }
+        }
+    }
+
+    if(latestInitialFallAsleep == null || wakeUp == null) return null
+
+    val currentTimezone = getCurrentTime().zone
+
+    val result = Dictionary()
+    result["period_id"] = info.periodId
+    result["duration"] = durationSecToString(totalSleepDuration.seconds)
+    result["quality"] = when(info.quality) {
+        1 -> "Не спал"
+        2 -> "Ужасно"
+        3 -> "Не очень"
+        4 -> "Не идеально"
+        5 -> "Замечательно"
+        else -> "Не записано"
+    }
+    result["begin_time"] = latestInitialFallAsleep.withZoneSameInstant(currentTimezone) .toLocalTime().truncatedTo(ChronoUnit.SECONDS).toString()
+    result["end_time"] = wakeUp.withZoneSameInstant(currentTimezone).toLocalTime().truncatedTo(ChronoUnit.SECONDS).toString()
+    result["date"] = wakeUp.withZoneSameInstant(currentTimezone).toLocalDate().format(
+        DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(Locale.getDefault())
+    )
+
+    return result
+}
+
 class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
     companion object {
     }
@@ -145,7 +228,7 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
     override fun getPluginSignals() = setOf<SignalInfo>()
 
     @UsedByGodot
-    fun getStats(): Dictionary? {
+    fun getLastCompletePeriodStats(): Dictionary? {
         val db = Database(context)
 
         val lastCompletedPeriod = db.db.rawQuery(
@@ -168,79 +251,34 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
         val records = db.getAllRecordsForPeriod(lastCompletedPeriod)
         records.sortWith { a, b -> a.recordedTime.compareTo(b.recordedTime) }
 
-        val minimumSleepTime = Duration.ofMinutes(10)
-        val timeToFallAsleep = Duration.ofMinutes(15)
+        return calculateSleepPeriodStats(SleepPeriodInfo(lastCompletedPeriod, quality, records))
+    }
 
-        var totalSleepDuration = Duration.ZERO
-        var lastFallAsleepTime: Instant? = null
-        var initialFallAsleepPhase = true // Only "period_begin" or "fall_asleep" were seen before
-        var latestInitialFallAsleep: ZonedDateTime? = null
-        var wakeUp: ZonedDateTime? = null
+    @UsedByGodot
+    fun getAllPeriodsStats(): Array<Dictionary> {
+        val db = Database(context)
 
-        val accumulateSleepUntil = fun(until: Instant) {
-            val fallAsleep = lastFallAsleepTime
-            if(fallAsleep == null) {
-                Log.w(MainActivity.TAG, "Invalid state at $until")
-                return
-            }
-
-            val begin = fallAsleep + timeToFallAsleep
-            val sleepTime = Duration.between(begin, until)
-            if(sleepTime < minimumSleepTime) return
-
-            totalSleepDuration += sleepTime
+        val allQuality = db.getQualityByPeriodId()
+        val allRecords = db.getAllRecords()
+        val recordsByPeriod = HashMap<Int, MutableList<Database.SleepRecord>>()
+        for(record in allRecords) {
+            val list = recordsByPeriod.getOrPut(record.periodId) { mutableListOf() }
+            list.add(record)
         }
 
-        for(record in records) {
-            when(record.type) {
-                "period_begin", "fall_asleep" -> {
-                    if(initialFallAsleepPhase) {
-                        lastFallAsleepTime = record.recordedTime.toInstant()
-                        latestInitialFallAsleep = record.recordedTime
-                    }
-                    else {
-                        val until = record.recordedTime.toInstant()
-                        accumulateSleepUntil(until)
-                        lastFallAsleepTime = until
-                    }
-                }
-                "interruption" -> {
-                    initialFallAsleepPhase = false
-                    val until = record.recordedTime.toInstant()
-                    accumulateSleepUntil(until)
-                    lastFallAsleepTime = until
-                }
-                "wake_up", "period_end" -> {
-                    initialFallAsleepPhase = false
-                    wakeUp = record.recordedTime
-                    val until = record.recordedTime.toInstant()
-                    accumulateSleepUntil(until)
-                    break
-                }
-                else -> {
-                    Log.d(MainActivity.TAG, "Unknown record type $record")
-                }
-            }
+        val periodIds = recordsByPeriod.keys.toIntArray()
+        periodIds.sortDescending()
+
+        val infos = mutableListOf<Dictionary>()
+        for(periodId in periodIds) {
+            val quality = allQuality[periodId] ?: 0
+            val records = recordsByPeriod[periodId]!!
+            records.sortWith { a, b -> a.recordedTime.compareTo(b.recordedTime) }
+            val stats = calculateSleepPeriodStats(SleepPeriodInfo(periodId, quality, records))
+            if(stats != null) infos.add(stats)
         }
 
-        if(latestInitialFallAsleep == null || wakeUp == null) return null
-
-        val currentTimezone = getCurrentTime().zone
-
-        val result = Dictionary()
-        result["duration"] = durationSecToString(totalSleepDuration.seconds)
-        result["quality"] = when(quality) {
-            1 -> "Не спал"
-            2 -> "Ужасно"
-            3 -> "Не очень"
-            4 -> "Не идеально"
-            5 -> "Замечательно"
-            else -> "Не записано"
-        }
-        result["begin_time"] = latestInitialFallAsleep.withZoneSameInstant(currentTimezone) .toLocalTime().truncatedTo(ChronoUnit.SECONDS).toString()
-        result["end_time"] = wakeUp.withZoneSameInstant(currentTimezone).toLocalTime().truncatedTo(ChronoUnit.SECONDS).toString()
-
-        return result
+        return infos.toTypedArray()
     }
 
     @UsedByGodot

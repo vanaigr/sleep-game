@@ -3,7 +3,7 @@ extends Label
 var bridgePlugin := Engine.get_singleton("BridgePlugin")
 
 func _process(delta: float) -> void:
-	var stats = bridgePlugin.getStats()
+	var stats = bridgePlugin.getLastCompletePeriodStats()
 	if stats == null:
 		text = 'Нет данных'
 	else:
