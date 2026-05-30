@@ -20,15 +20,21 @@ config/icon="res://icon.svg"
 
 Database="*uid://bd2b6sreskeo4"
 ScreenStack="*uid://cjmiffi6w3jbn"
+CameraSize="*uid://cstldalilfc43"
+
+[debug]
+
+gdscript/warnings/directory_rules={
+"res://addons/screen_display": 1
+}
 
 [display]
 
 window/size/viewport_width=1080
-window/size/viewport_height=1920
+window/size/viewport_height=1080
 window/size/mode=3
 window/subwindows/embed_subwindows=false
 window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
 window/handheld/orientation=1
 
 [dotnet]
@@ -37,7 +43,11 @@ project/assembly_name="sleep-game"
 
 [editor_plugins]
 
-enabled=PackedStringArray()
+enabled=PackedStringArray("res://addons/screen_display/plugin.cfg")
+
+[global_group]
+
+Screens=""
 
 [physics]
 

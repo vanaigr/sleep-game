@@ -2,6 +2,7 @@
 
 [ext_resource type="StyleBox" uid="uid://bjhmoyj3i4fsd" path="res://TransparentButton.tres" id="1_00tp4"]
 [ext_resource type="Script" uid="uid://dvlfm2hfrlnhd" path="res://bed.gd" id="1_6uqi0"]
+[ext_resource type="Script" uid="uid://dvw5k2wc1i6n6" path="res://cameraSizer.gd" id="1_uty7l"]
 [ext_resource type="Script" uid="uid://cict6ubrgcwhr" path="res://statsTable.gd" id="2_6uqi0"]
 [ext_resource type="Script" uid="uid://0iov6wr84lb1" path="res://alarmClock.gd" id="2_ppyta"]
 [ext_resource type="Texture2D" uid="uid://cwftyhqhltel8" path="res://graphics/Main screen/board.png" id="4_ykrsh"]
@@ -11,7 +12,6 @@
 [ext_resource type="Texture2D" uid="uid://bsql1omoxqqmn" path="res://graphics/Main screen/spider.png" id="7_vbegm"]
 [ext_resource type="Texture2D" uid="uid://l2ffdul7dh0d" path="res://graphics/Main screen/fridge.png" id="9_xersf"]
 [ext_resource type="Script" uid="uid://dlpfsbvy64guj" path="res://elementResizer.gd" id="11_5tkv4"]
-[ext_resource type="Script" uid="uid://pmxpjfjfsu41" path="res://screenController.gd" id="11_77dp3"]
 [ext_resource type="Script" uid="uid://dnf2mqf4jqj20" path="res://debugToggle.gd" id="12_0m0f1"]
 [ext_resource type="Script" uid="uid://lgc0sefys42i" path="res://statList.gd" id="13_b0q6j"]
 [ext_resource type="Script" uid="uid://7aa7nyrchhgb" path="res://detailedStatsPopup.gd" id="14_mhym6"]
@@ -32,11 +32,15 @@ corner_detail = 5
 [node name="Node2D" type="Node2D" unique_id=1025946398]
 
 [node name="mainCamera" type="Camera2D" parent="." unique_id=28195255]
-position = Vector2(-2417, 921)
+position = Vector2(25, -19)
+limit_enabled = false
+
+[node name="Node" type="Node" parent="mainCamera" unique_id=1394664806]
+script = ExtResource("1_uty7l")
 
 [node name="bedroom" type="Node" parent="." unique_id=2016100922]
 
-[node name="Camera" type="Camera2D" parent="bedroom" unique_id=77644272]
+[node name="Screen" type="Node2D" parent="bedroom" unique_id=921976242 groups=["Screens"]]
 position = Vector2(0, -18)
 
 [node name="BackgroundMainScreen" type="Sprite2D" parent="bedroom" unique_id=728432563]
@@ -113,7 +117,7 @@ metadata/_edit_use_anchors_ = true
 
 [node name="elementResizer" type="Node" parent="bedroom/bedroomToCellar" unique_id=1135689298 node_paths=PackedStringArray("cam")]
 script = ExtResource("11_5tkv4")
-cam = NodePath("../../Camera")
+cam = NodePath("../../../mainCamera")
 autoLeft = true
 autoRight = true
 autoBottom = true
@@ -149,40 +153,40 @@ metadata/_edit_use_anchors_ = true
 [node name="cellar" type="Node" parent="." unique_id=1936753507]
 
 [node name="BackgroundMainScreen3" type="Sprite2D" parent="cellar" unique_id=539751400]
-position = Vector2(3.0000002, 1435.3335)
+position = Vector2(2730.5, -168.6665)
 rotation = -3.1415925
 scale = Vector2(0.35966668, 0.35966668)
 texture = ExtResource("5_g14j6")
 
 [node name="BackgroundMainScreen2" type="Sprite2D" parent="cellar" unique_id=1625643696]
-position = Vector2(3, 1714.3335)
+position = Vector2(2730.5, 110.333496)
 scale = Vector2(0.35966668, 0.35966668)
 texture = ExtResource("5_g14j6")
 
-[node name="Camera" type="Camera2D" parent="cellar" unique_id=900176351]
-position = Vector2(0, 1543.3335)
+[node name="Node2D" type="Node2D" parent="cellar" unique_id=1878768883 groups=["Screens"]]
+position = Vector2(2727.5, -60.666504)
 
 [node name="cellarToBedroom" type="Button" parent="cellar" unique_id=1932463253]
 z_index = 100
-offset_left = -331.0
-offset_top = 819.0
-offset_right = 362.0
-offset_bottom = 890.0
+offset_left = 2396.5
+offset_top = -785.0
+offset_right = 3089.5
+offset_bottom = -714.0
 text = "В спальню"
 metadata/_edit_use_anchors_ = true
 
 [node name="elementResizer" type="Node" parent="cellar/cellarToBedroom" unique_id=91019745 node_paths=PackedStringArray("cam")]
 script = ExtResource("11_5tkv4")
-cam = NodePath("../../Camera")
+cam = NodePath("../../../mainCamera")
 autoLeft = true
 autoRight = true
 autoTop = true
 
 [node name="ScrollContainer" type="ScrollContainer" parent="cellar" unique_id=383911033]
-offset_left = -515.0
-offset_top = 1019.0
-offset_right = 520.0
-offset_bottom = 2019.0
+offset_left = 2212.5
+offset_top = -585.0
+offset_right = 3247.5
+offset_bottom = 415.0
 
 [node name="VBoxContainer" type="VBoxContainer" parent="cellar/ScrollContainer" unique_id=156330710 node_paths=PackedStringArray("detailedStatsPopup")]
 layout_mode = 2
@@ -196,10 +200,10 @@ layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 1367.0
-offset_top = 35.0
-offset_right = 1367.0
-offset_bottom = 35.0
+offset_left = 4094.5
+offset_top = -1569.0
+offset_right = 4094.5
+offset_bottom = -1569.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("14_mhym6")
@@ -267,14 +271,9 @@ offset_right = 1036.0
 offset_bottom = 885.0
 theme_override_font_sizes/font_size = 32
 
-[node name="ScreenController" type="Node" parent="." unique_id=1010820754 node_paths=PackedStringArray("screens", "camera")]
-script = ExtResource("11_77dp3")
-screens = [NodePath("../bedroom/Camera"), NodePath("../cellar/Camera")]
-screenTransitionControls = Array[Array]([[NodePath("../bedroom/bedroomToCellar")], [NodePath("../cellar/cellarToBedroom")]])
-camera = NodePath("../mainCamera")
+[node name="Node2D" type="Node2D" parent="." unique_id=559424173]
+position = Vector2(2188, -1019)
 
 [connection signal="pressed" from="bedroom/SleepButton" to="bedroom/SleepButton" method="_on_pressed"]
 [connection signal="pressed" from="bedroom/WakeUpButton" to="bedroom/WakeUpButton" method="_on_pressed"]
-[connection signal="pressed" from="bedroom/bedroomToCellar" to="ScreenController" method="toCellar"]
 [connection signal="pressed" from="bedroom/debugToggle" to="bedroom/debugToggle" method="_on_pressed"]
-[connection signal="pressed" from="cellar/cellarToBedroom" to="ScreenController" method="toBedroom"]

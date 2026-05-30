@@ -13,6 +13,9 @@ func _process(delta: float) -> void:
 	setPositions()
 	
 func setPositions():
+	if cam == null:
+		return
+		
 	var p = getCameraWorldPosition() 
 	var v = get_parent() as Variant
 		
