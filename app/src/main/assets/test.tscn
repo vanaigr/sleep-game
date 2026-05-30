@@ -159,46 +159,42 @@ metadata/_edit_use_anchors_ = true
 [node name="cellar" type="Node2D" parent="." unique_id=982849024 groups=["Screens"]]
 position = Vector2(1856, -43)
 
-[node name="BackgroundMainScreen3" type="Sprite2D" parent="cellar" unique_id=539751400]
-position = Vector2(11.5, -168.6665)
-rotation = -3.1415925
-scale = Vector2(0.35966668, 0.35966668)
-texture = ExtResource("5_g14j6")
+[node name="ScrollContainer" type="ScrollContainer" parent="cellar" unique_id=383911033]
+offset_left = -546.0
+offset_top = -950.0
+offset_right = 489.0
+offset_bottom = 50.0
 
-[node name="BackgroundMainScreen2" type="Sprite2D" parent="cellar" unique_id=1625643696]
-position = Vector2(11.5, 110.333496)
-scale = Vector2(0.35966668, 0.35966668)
-texture = ExtResource("5_g14j6")
-
-[node name="cellarToBedroom" type="Button" parent="cellar" unique_id=1932463253]
-z_index = 100
-offset_left = -322.5
-offset_top = -785.0
-offset_right = 370.5
-offset_bottom = -714.0
-scale = Vector2(1.0320598, 1)
-text = "В спальню"
-metadata/_edit_use_anchors_ = true
-
-[node name="elementResizer" type="Node" parent="cellar/cellarToBedroom" unique_id=91019745 node_paths=PackedStringArray("screen")]
+[node name="elementResizer" type="Node" parent="cellar/ScrollContainer" unique_id=1189666349 node_paths=PackedStringArray("screen")]
 script = ExtResource("11_5tkv4")
 screen = NodePath("../..")
 autoLeft = true
 autoRight = true
 autoTop = true
+autoBottom = true
 
-[node name="ScrollContainer" type="ScrollContainer" parent="cellar" unique_id=383911033]
-offset_left = -506.5
-offset_top = -585.0
-offset_right = 528.5
-offset_bottom = 415.0
+[node name="PanelContainer" type="PanelContainer" parent="cellar/ScrollContainer" unique_id=1344372906]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 1
 
-[node name="VBoxContainer" type="VBoxContainer" parent="cellar/ScrollContainer" unique_id=156330710 node_paths=PackedStringArray("detailedStatsPopup")]
+[node name="VBoxContainer2" type="VBoxContainer" parent="cellar/ScrollContainer/PanelContainer" unique_id=467272177]
+layout_mode = 2
+
+[node name="cellarToBedroom" type="Button" parent="cellar/ScrollContainer/PanelContainer/VBoxContainer2" unique_id=1932463253]
+z_index = 100
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+text = "В спальню"
+metadata/_edit_use_anchors_ = true
+
+[node name="VBoxContainer" type="VBoxContainer" parent="cellar/ScrollContainer/PanelContainer/VBoxContainer2" unique_id=156330710 node_paths=PackedStringArray("detailedStatsPopup")]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 script = ExtResource("13_b0q6j")
-detailedStatsPopup = NodePath("../../../detailsWindow/detailedStatsWindow")
+detailedStatsPopup = NodePath("../../../../../detailsWindow/detailedStatsWindow")
 
 [node name="detailsWindow" type="Control" parent="." unique_id=1461642602 groups=["Screens"]]
 layout_mode = 3
@@ -287,4 +283,4 @@ theme_override_font_sizes/font_size = 32
 [connection signal="pressed" from="bedroom/WakeUpButton" to="bedroom/WakeUpButton" method="_on_pressed"]
 [connection signal="pressed" from="bedroom/bedroomToCellar" to="mainCamera/screenController" method="toCellar"]
 [connection signal="pressed" from="bedroom/debug/debugToggle" to="bedroom/debug/debugToggle" method="_on_pressed"]
-[connection signal="pressed" from="cellar/cellarToBedroom" to="mainCamera/screenController" method="toBedroom"]
+[connection signal="pressed" from="cellar/ScrollContainer/PanelContainer/VBoxContainer2/cellarToBedroom" to="mainCamera/screenController" method="toBedroom"]
