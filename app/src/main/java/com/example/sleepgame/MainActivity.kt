@@ -42,6 +42,7 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.floor
+import kotlin.math.max
 import kotlin.math.round
 
 class MainActivity: AppCompatActivity(), GodotHost {
@@ -151,106 +152,30 @@ class MainActivity: AppCompatActivity(), GodotHost {
     }
 }
 
-data class SleepPeriodInfo(val periodId: Int, val quality: Int, val records: MutableList<Database.SleepRecord>)
+data class SleepPeriodInfo(
+    val periodId: Int,
+    val quality: Int,
+    val records: MutableList<Database.SleepRecord>
+)
 
 val minimumSleepTime = Duration.ofMinutes(10)
 val timeToFallAsleep = Duration.ofMinutes(15)
 
-fun calculateSleepPeriodStats(info: SleepPeriodInfo): Dictionary? {
-    var totalSleepDuration = Duration.ZERO
-    var lastFallAsleepTime: Instant? = null
-    var initialFallAsleepPhase = true // Only "period_begin" or "fall_asleep" were seen before
-    var latestInitialFallAsleep: ZonedDateTime? = null
-    var wakeUp: ZonedDateTime? = null
-    var interruptionCount = 0
-
-    val accumulateSleepUntil = fun(until: Instant) {
-        val fallAsleep = lastFallAsleepTime
-        if(fallAsleep == null) {
-            Log.w("calculateSleepPeriodStats", "Invalid state at $until")
-            return
-        }
-
-        val begin = fallAsleep + timeToFallAsleep
-        val sleepTime = Duration.between(begin, until)
-        if(sleepTime >= minimumSleepTime) {
-            totalSleepDuration += sleepTime
-        }
-    }
-
-    for(record in info.records) {
-        when(record.type) {
-            "period_begin", "fall_asleep" -> {
-                if(initialFallAsleepPhase) {
-                    lastFallAsleepTime = record.recordedTime.toInstant()
-                    latestInitialFallAsleep = record.recordedTime
-                }
-                else {
-                    interruptionCount++
-                    val until = record.recordedTime.toInstant()
-                    accumulateSleepUntil(until)
-                    lastFallAsleepTime = until
-                }
-            }
-            "interruption" -> {
-                interruptionCount++
-                initialFallAsleepPhase = false
-                val until = record.recordedTime.toInstant()
-                accumulateSleepUntil(until)
-                lastFallAsleepTime = until
-            }
-            "wake_up", "period_end" -> {
-                initialFallAsleepPhase = false
-                wakeUp = record.recordedTime
-                val until = record.recordedTime.toInstant()
-                accumulateSleepUntil(until)
-                break
-            }
-            else -> {
-                Log.d("calculateSleepPeriodStats", "Unknown record type $record")
-            }
-        }
-    }
-
-    if(latestInitialFallAsleep == null || wakeUp == null) return null
-
-    val currentTimezone = getCurrentTime().zone
-
-    val result = Dictionary()
-    result["period_id"] = info.periodId
-    result["duration"] = durationSecToString(totalSleepDuration.seconds)
-    result["quality"] = when(info.quality) {
-        1 -> "Не спал"
-        2 -> "Ужасно"
-        3 -> "Не очень"
-        4 -> "Не идеально"
-        5 -> "Замечательно"
-        else -> "Не записано"
-    }
-    result["begin_time"] = latestInitialFallAsleep.withZoneSameInstant(currentTimezone) .toLocalTime().truncatedTo(ChronoUnit.SECONDS).toString()
-    result["end_time"] = wakeUp.withZoneSameInstant(currentTimezone).toLocalTime().truncatedTo(ChronoUnit.SECONDS).toString()
-    result["date"] = wakeUp.withZoneSameInstant(currentTimezone).toLocalDate().format(
-        DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(Locale.getDefault())
-    )
-    result["interruption_count"] = interruptionCount
-
-    return result
-}
-
-data class SleepPeriodGraphData(
-    val latestInitialFallAsleep: ZonedDateTime?,
-    val wakeUp: ZonedDateTime?,
-    val nonSleepRanges: MutableList<Array<Instant>>,
+data class CalculatedSleepPeriodData(
+    val totalSleepDuration: Duration,
+    var firstFallAsleep: Instant?,
+    var wakeUp: Instant?,
+    var nonSleepRanges: List<Array<Instant>>,
 )
 
-fun calculateSleepPeriodGraphData(records: Iterable<Database.SleepRecord>): SleepPeriodGraphData {
+fun calculateSleepPeriodData(records: Iterable<Database.SleepRecord>): CalculatedSleepPeriodData {
     val nonSleepRanges = mutableListOf<Array<Instant>>()
-
     var totalSleepDuration = Duration.ZERO
-    var lastFallAsleepTime: Instant? = null
+    var firstFallAsleep: Instant? = null
+    var wakeUp: Instant? = null
+
     var initialFallAsleepPhase = true // Only "period_begin" or "fall_asleep" were seen before
-    var latestInitialFallAsleep: ZonedDateTime? = null
-    var wakeUp: ZonedDateTime? = null
+    var lastFallAsleepTime: Instant? = null
 
     val accumulateSleepUntil = fun(until: Instant) {
         val fallAsleep = lastFallAsleepTime
@@ -264,6 +189,7 @@ fun calculateSleepPeriodGraphData(records: Iterable<Database.SleepRecord>): Slee
         if(sleepTime >= minimumSleepTime) {
             totalSleepDuration += sleepTime
             nonSleepRanges.add(arrayOf(until, until))
+            if(firstFallAsleep == null) firstFallAsleep = begin
         }
         else {
             nonSleepRanges.last()[1] = until
@@ -275,7 +201,6 @@ fun calculateSleepPeriodGraphData(records: Iterable<Database.SleepRecord>): Slee
             "period_begin", "fall_asleep" -> {
                 if(initialFallAsleepPhase) {
                     lastFallAsleepTime = record.recordedTime.toInstant()
-                    latestInitialFallAsleep = record.recordedTime
 
                     if(nonSleepRanges.isEmpty()) {
                         nonSleepRanges.add(arrayOf(lastFallAsleepTime, lastFallAsleepTime))
@@ -298,8 +223,8 @@ fun calculateSleepPeriodGraphData(records: Iterable<Database.SleepRecord>): Slee
             }
             "wake_up", "period_end" -> {
                 initialFallAsleepPhase = false
-                wakeUp = record.recordedTime
                 val until = record.recordedTime.toInstant()
+                wakeUp = until
                 accumulateSleepUntil(until)
                 break
             }
@@ -309,7 +234,31 @@ fun calculateSleepPeriodGraphData(records: Iterable<Database.SleepRecord>): Slee
         }
     }
 
-    return SleepPeriodGraphData(latestInitialFallAsleep, wakeUp, nonSleepRanges)
+    return CalculatedSleepPeriodData(totalSleepDuration, firstFallAsleep, wakeUp, nonSleepRanges)
+}
+
+fun makeSleepPeriodDataDict(periodId: Int, info: CalculatedSleepPeriodData, quality: Int): Dictionary {
+    val currentTimezone = getCurrentTime().zone
+
+    val result = Dictionary()
+    result["period_id"] = periodId
+    result["duration"] = durationSecToString(info.totalSleepDuration.seconds)
+    result["quality"] = when(quality) {
+        1 -> "Не спал"
+        2 -> "Ужасно"
+        3 -> "Не очень"
+        4 -> "Не идеально"
+        5 -> "Замечательно"
+        else -> "Не записано"
+    }
+    result["begin_time"] = info.firstFallAsleep?.atZone(currentTimezone)?.toLocalTime()?.truncatedTo(ChronoUnit.SECONDS).toString()
+    result["end_time"] = info.wakeUp?.atZone(currentTimezone)?.toLocalTime()?.truncatedTo(ChronoUnit.SECONDS).toString()
+    result["date"] = info.wakeUp?.atZone(currentTimezone)?.toLocalDate()?.format(
+        DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(Locale.getDefault())
+    )
+    result["interruption_count"] = max(0, info.nonSleepRanges.size - 1)
+
+    return result
 }
 
 fun roundByHours(time: ZonedDateTime, roundByHours: Int, ceil: Boolean): ZonedDateTime {
@@ -372,7 +321,7 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
         val totalSeconds = Duration.between(roundedBegin, roundedEnd).seconds.toDouble()
         val roundedBeginInstant = roundedBegin.toInstant()
 
-        val graphData = calculateSleepPeriodGraphData(records)
+        val graphData = calculateSleepPeriodData(records)
 
         val result = Dictionary()
 
@@ -446,14 +395,14 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
         }
         result["non_sleep_polygon_count"] = nonSleepPolygonCount
 
-        if(graphData.latestInitialFallAsleep != null) {
-            result["fall_asleep_position"] = timeToX(graphData.latestInitialFallAsleep.toInstant())
-            result["fall_asleep_label"] = graphData.latestInitialFallAsleep.withZoneSameInstant(currentTimezone).toLocalTime()
+        if(graphData.firstFallAsleep != null) {
+            result["fall_asleep_position"] = timeToX(graphData.firstFallAsleep!!)
+            result["fall_asleep_label"] = graphData.firstFallAsleep!!.atZone(currentTimezone).toLocalTime()
                 .truncatedTo(ChronoUnit.MINUTES).toString()
         }
         if(graphData.wakeUp != null) {
-            result["wake_up_position"] = timeToX(graphData.wakeUp.toInstant())
-            result["wake_up_label"] = graphData.wakeUp.withZoneSameInstant(currentTimezone).toLocalTime()
+            result["wake_up_position"] = timeToX(graphData.wakeUp!!)
+            result["wake_up_label"] = graphData.wakeUp!!.atZone(currentTimezone).toLocalTime()
                 .truncatedTo(ChronoUnit.MINUTES).toString()
         }
 
@@ -485,7 +434,9 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
         val records = db.getAllRecordsForPeriod(lastCompletedPeriod)
         records.sortWith { a, b -> a.recordedTime.compareTo(b.recordedTime) }
 
-        return calculateSleepPeriodStats(SleepPeriodInfo(lastCompletedPeriod, quality, records))
+        val info = calculateSleepPeriodData(records)
+
+        return makeSleepPeriodDataDict(lastCompletedPeriod, info, quality)
     }
 
     @UsedByGodot
@@ -513,8 +464,8 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
             val quality = allQuality[periodId] ?: 0
             val records = recordsByPeriod[periodId]!!
             records.sortWith { a, b -> a.recordedTime.compareTo(b.recordedTime) }
-            val stats = calculateSleepPeriodStats(SleepPeriodInfo(periodId, quality, records))
-            if(stats != null) infos.add(stats)
+            val stats = calculateSleepPeriodData(records)
+            infos.add(makeSleepPeriodDataDict(periodId, stats, quality))
         }
 
         return infos.toTypedArray()
