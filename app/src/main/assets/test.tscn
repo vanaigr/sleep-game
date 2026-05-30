@@ -12,6 +12,7 @@
 [ext_resource type="Texture2D" uid="uid://bsql1omoxqqmn" path="res://graphics/Main screen/spider.png" id="7_vbegm"]
 [ext_resource type="Texture2D" uid="uid://l2ffdul7dh0d" path="res://graphics/Main screen/fridge.png" id="9_xersf"]
 [ext_resource type="Script" uid="uid://dlpfsbvy64guj" path="res://elementResizer.gd" id="11_5tkv4"]
+[ext_resource type="Script" uid="uid://pmxpjfjfsu41" path="res://screenController.gd" id="11_77dp3"]
 [ext_resource type="Script" uid="uid://dnf2mqf4jqj20" path="res://debugToggle.gd" id="12_0m0f1"]
 [ext_resource type="Script" uid="uid://lgc0sefys42i" path="res://statList.gd" id="13_b0q6j"]
 [ext_resource type="Script" uid="uid://7aa7nyrchhgb" path="res://detailedStatsPopup.gd" id="14_mhym6"]
@@ -32,16 +33,20 @@ corner_detail = 5
 [node name="Node2D" type="Node2D" unique_id=1025946398]
 
 [node name="mainCamera" type="Camera2D" parent="." unique_id=28195255]
-position = Vector2(25, -19)
+position = Vector2(-2953, -2178)
 limit_enabled = false
 
-[node name="Node" type="Node" parent="mainCamera" unique_id=1394664806]
+[node name="cameraSizer" type="Node" parent="mainCamera" unique_id=1394664806]
 script = ExtResource("1_uty7l")
 
-[node name="bedroom" type="Node" parent="." unique_id=2016100922]
+[node name="screenController" type="Node" parent="mainCamera" unique_id=1088062634 node_paths=PackedStringArray("screens", "camera")]
+script = ExtResource("11_77dp3")
+screens = [NodePath("../../bedroom"), NodePath("../../cellar"), NodePath("../../detailsWindow")]
+anchorScreens = Array[int]([0, 0, 1])
+anchorEdges = Array[int]([0, 1, 0])
+camera = NodePath("..")
 
-[node name="Screen" type="Node2D" parent="bedroom" unique_id=921976242 groups=["Screens"]]
-position = Vector2(0, -18)
+[node name="bedroom" type="Node2D" parent="." unique_id=1102416164 groups=["Screens"]]
 
 [node name="BackgroundMainScreen" type="Sprite2D" parent="bedroom" unique_id=728432563]
 position = Vector2(-18, -7)
@@ -115,14 +120,16 @@ offset_bottom = 713.0
 text = "В подвал"
 metadata/_edit_use_anchors_ = true
 
-[node name="elementResizer" type="Node" parent="bedroom/bedroomToCellar" unique_id=1135689298 node_paths=PackedStringArray("cam")]
+[node name="elementResizer" type="Node" parent="bedroom/bedroomToCellar" unique_id=1135689298 node_paths=PackedStringArray("screen")]
 script = ExtResource("11_5tkv4")
-cam = NodePath("../../../mainCamera")
+screen = NodePath("../..")
 autoLeft = true
 autoRight = true
 autoBottom = true
 
-[node name="debugToggle" type="Button" parent="bedroom" unique_id=608502766 node_paths=PackedStringArray("input", "validIndicator")]
+[node name="debug" type="Node" parent="bedroom" unique_id=762418767]
+
+[node name="debugToggle" type="Button" parent="bedroom/debug" unique_id=608502766 node_paths=PackedStringArray("input", "validIndicator")]
 offset_left = -544.0
 offset_top = -974.0
 offset_right = 541.0
@@ -133,7 +140,7 @@ input = NodePath("../debugTime")
 validIndicator = NodePath("../debugValidIndicator")
 metadata/_edit_use_anchors_ = true
 
-[node name="debugTime" type="LineEdit" parent="bedroom" unique_id=1325740229]
+[node name="debugTime" type="LineEdit" parent="bedroom/debug" unique_id=1325740229]
 offset_left = -545.0
 offset_top = -755.0
 offset_right = 414.0
@@ -141,51 +148,49 @@ offset_bottom = -657.0
 theme_override_font_sizes/font_size = 32
 metadata/_edit_use_anchors_ = true
 
-[node name="debugValidIndicator" type="Panel" parent="bedroom" unique_id=1590448905]
+[node name="debugValidIndicator" type="Panel" parent="bedroom/debug" unique_id=1590448905]
 anchors_preset = -1
-anchor_right = 0.296
 offset_left = 420.0
 offset_top = -751.0
-offset_right = 200.32
+offset_right = 521.0
 offset_bottom = -657.0
 metadata/_edit_use_anchors_ = true
 
-[node name="cellar" type="Node" parent="." unique_id=1936753507]
+[node name="cellar" type="Node2D" parent="." unique_id=982849024 groups=["Screens"]]
+position = Vector2(1856, -43)
 
 [node name="BackgroundMainScreen3" type="Sprite2D" parent="cellar" unique_id=539751400]
-position = Vector2(2730.5, -168.6665)
+position = Vector2(11.5, -168.6665)
 rotation = -3.1415925
 scale = Vector2(0.35966668, 0.35966668)
 texture = ExtResource("5_g14j6")
 
 [node name="BackgroundMainScreen2" type="Sprite2D" parent="cellar" unique_id=1625643696]
-position = Vector2(2730.5, 110.333496)
+position = Vector2(11.5, 110.333496)
 scale = Vector2(0.35966668, 0.35966668)
 texture = ExtResource("5_g14j6")
 
-[node name="Node2D" type="Node2D" parent="cellar" unique_id=1878768883 groups=["Screens"]]
-position = Vector2(2727.5, -60.666504)
-
 [node name="cellarToBedroom" type="Button" parent="cellar" unique_id=1932463253]
 z_index = 100
-offset_left = 2396.5
+offset_left = -322.5
 offset_top = -785.0
-offset_right = 3089.5
+offset_right = 370.5
 offset_bottom = -714.0
+scale = Vector2(1.0320598, 1)
 text = "В спальню"
 metadata/_edit_use_anchors_ = true
 
-[node name="elementResizer" type="Node" parent="cellar/cellarToBedroom" unique_id=91019745 node_paths=PackedStringArray("cam")]
+[node name="elementResizer" type="Node" parent="cellar/cellarToBedroom" unique_id=91019745 node_paths=PackedStringArray("screen")]
 script = ExtResource("11_5tkv4")
-cam = NodePath("../../../mainCamera")
+screen = NodePath("../..")
 autoLeft = true
 autoRight = true
 autoTop = true
 
 [node name="ScrollContainer" type="ScrollContainer" parent="cellar" unique_id=383911033]
-offset_left = 2212.5
+offset_left = -506.5
 offset_top = -585.0
-offset_right = 3247.5
+offset_right = 528.5
 offset_bottom = 415.0
 
 [node name="VBoxContainer" type="VBoxContainer" parent="cellar/ScrollContainer" unique_id=156330710 node_paths=PackedStringArray("detailedStatsPopup")]
@@ -193,17 +198,24 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 script = ExtResource("13_b0q6j")
-detailedStatsPopup = NodePath("../../detailedStatsWindow")
+detailedStatsPopup = NodePath("../../../detailsWindow/detailedStatsWindow")
 
-[node name="detailedStatsWindow" type="Control" parent="cellar" unique_id=634421286 node_paths=PackedStringArray("nightName", "graph", "nightInterruptions", "sleepDuration", "sleepQuality")]
+[node name="detailsWindow" type="Control" parent="." unique_id=1461642602 groups=["Screens"]]
 layout_mode = 3
-anchors_preset = 15
+anchors_preset = 0
+offset_left = 3656.0
+offset_top = -43.0
+offset_right = 3656.0
+offset_bottom = -43.0
+
+[node name="detailedStatsWindow" type="Control" parent="detailsWindow" unique_id=634421286 node_paths=PackedStringArray("nightName", "graph", "nightInterruptions", "sleepDuration", "sleepQuality")]
+layout_mode = 1
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 4094.5
-offset_top = -1569.0
-offset_right = 4094.5
-offset_bottom = -1569.0
+offset_left = -536.0
+offset_top = -947.0
+offset_right = 556.0
+offset_bottom = 995.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("14_mhym6")
@@ -213,15 +225,15 @@ nightInterruptions = NodePath("Panel/nightInterruptions")
 sleepDuration = NodePath("Panel/sleepDuration")
 sleepQuality = NodePath("Panel/sleepQuality")
 
-[node name="elementResizer" type="Node" parent="cellar/detailedStatsWindow" unique_id=1641646121 node_paths=PackedStringArray("cam")]
+[node name="elementResizer" type="Node" parent="detailsWindow/detailedStatsWindow" unique_id=1942971383 node_paths=PackedStringArray("screen")]
 script = ExtResource("11_5tkv4")
-cam = NodePath("../../../mainCamera")
+screen = NodePath("../..")
 autoLeft = true
 autoRight = true
 autoTop = true
 autoBottom = true
 
-[node name="Panel" type="Panel" parent="cellar/detailedStatsWindow" unique_id=79424292]
+[node name="Panel" type="Panel" parent="detailsWindow/detailedStatsWindow" unique_id=79424292]
 z_index = 200
 layout_mode = 1
 anchors_preset = 15
@@ -231,7 +243,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_a3se8")
 
-[node name="nightName" type="Label" parent="cellar/detailedStatsWindow/Panel" unique_id=2093198272]
+[node name="nightName" type="Label" parent="detailsWindow/detailedStatsWindow/Panel" unique_id=2093198272]
 layout_mode = 0
 offset_left = 37.0
 offset_top = 29.0
@@ -239,7 +251,7 @@ offset_right = 1036.0
 offset_bottom = 100.0
 theme_override_font_sizes/font_size = 32
 
-[node name="Graph" type="Control" parent="cellar/detailedStatsWindow/Panel" unique_id=726906575]
+[node name="Graph" type="Control" parent="detailsWindow/detailedStatsWindow/Panel" unique_id=726906575]
 anchors_preset = 0
 offset_left = 36.0
 offset_top = 152.0
@@ -247,7 +259,7 @@ offset_right = 1040.0
 offset_bottom = 577.0
 script = ExtResource("15_a3se8")
 
-[node name="nightInterruptions" type="Label" parent="cellar/detailedStatsWindow/Panel" unique_id=1572639642]
+[node name="nightInterruptions" type="Label" parent="detailsWindow/detailedStatsWindow/Panel" unique_id=1572639642]
 layout_mode = 0
 offset_left = 37.0
 offset_top = 577.0
@@ -255,7 +267,7 @@ offset_right = 1036.0
 offset_bottom = 648.0
 theme_override_font_sizes/font_size = 32
 
-[node name="sleepDuration" type="Label" parent="cellar/detailedStatsWindow/Panel" unique_id=1882698892]
+[node name="sleepDuration" type="Label" parent="detailsWindow/detailedStatsWindow/Panel" unique_id=1882698892]
 layout_mode = 0
 offset_left = 37.0
 offset_top = 690.0
@@ -263,7 +275,7 @@ offset_right = 1036.0
 offset_bottom = 761.0
 theme_override_font_sizes/font_size = 32
 
-[node name="sleepQuality" type="Label" parent="cellar/detailedStatsWindow/Panel" unique_id=1825494483]
+[node name="sleepQuality" type="Label" parent="detailsWindow/detailedStatsWindow/Panel" unique_id=1825494483]
 layout_mode = 0
 offset_left = 37.0
 offset_top = 814.0
@@ -271,9 +283,8 @@ offset_right = 1036.0
 offset_bottom = 885.0
 theme_override_font_sizes/font_size = 32
 
-[node name="Node2D" type="Node2D" parent="." unique_id=559424173]
-position = Vector2(2188, -1019)
-
 [connection signal="pressed" from="bedroom/SleepButton" to="bedroom/SleepButton" method="_on_pressed"]
 [connection signal="pressed" from="bedroom/WakeUpButton" to="bedroom/WakeUpButton" method="_on_pressed"]
-[connection signal="pressed" from="bedroom/debugToggle" to="bedroom/debugToggle" method="_on_pressed"]
+[connection signal="pressed" from="bedroom/bedroomToCellar" to="mainCamera/screenController" method="toCellar"]
+[connection signal="pressed" from="bedroom/debug/debugToggle" to="bedroom/debug/debugToggle" method="_on_pressed"]
+[connection signal="pressed" from="cellar/cellarToBedroom" to="mainCamera/screenController" method="toBedroom"]

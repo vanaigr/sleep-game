@@ -44,7 +44,7 @@ class DrawPanel extends Node2D:
 		for node in plugin.get_tree().get_nodes_in_group(gizmoGroup):
 			if not _is_node_in_edited_scene(node, scene_root):
 				continue
-			if not node is Node2D:
+			if 'global_position' not in node:
 				continue
 			if not node.is_inside_tree():
 				continue
