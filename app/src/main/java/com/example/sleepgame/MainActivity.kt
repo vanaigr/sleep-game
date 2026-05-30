@@ -234,6 +234,10 @@ fun calculateSleepPeriodData(records: Iterable<Database.SleepRecord>): Calculate
         }
     }
 
+    if(!nonSleepRanges.isEmpty() && nonSleepRanges.last()[0] === wakeUp) {
+        nonSleepRanges.removeAt(nonSleepRanges.size - 1)
+    }
+
     return CalculatedSleepPeriodData(totalSleepDuration, firstFallAsleep, wakeUp, nonSleepRanges)
 }
 
