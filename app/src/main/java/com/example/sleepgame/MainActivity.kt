@@ -217,7 +217,7 @@ fun calculateSleepPeriodData(records: Iterable<Database.SleepRecord>): Calculate
                 initialFallAsleepPhase = false
                 val time = record.recordedTime.toInstant()
                 wakeUp = time
-                accumulateSleepUntil(time, record.timeToFallAsleep, record.minimumSleepDuration)
+                accumulateSleepUntil(time, Duration.ZERO, record.minimumSleepDuration)
                 break
             }
             else -> {
