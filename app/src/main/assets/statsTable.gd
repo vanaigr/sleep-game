@@ -12,4 +12,5 @@ func _process(delta: float) -> void:
 			'Время засыпания: ' + stats['begin_time'],
 			'Качество: ' + stats['quality'],
 			'Продолжительность: ' + stats['duration'],
+			"Время лежания в кровати: " + stats["duration_before_falling_asleep"],
 		])

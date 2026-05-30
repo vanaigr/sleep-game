@@ -261,6 +261,12 @@ fun makeSleepPeriodDataDict(periodId: Int, info: CalculatedSleepPeriodData, qual
         DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(Locale.getDefault())
     )
     result["interruption_count"] = max(0, info.nonSleepRanges.size - 1)
+    if(!info.nonSleepRanges.isEmpty()) {
+        result["duration_before_falling_asleep"] = durationSecToString(Duration.between(info.nonSleepRanges[0][0], info.nonSleepRanges[0][1] + timeToFallAsleep).seconds)
+    }
+    else {
+        result["duration_before_falling_asleep"] = "N/A"
+    }
 
     return result
 }

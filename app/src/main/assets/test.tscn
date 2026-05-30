@@ -204,7 +204,7 @@ offset_top = -43.0
 offset_right = 3656.0
 offset_bottom = -43.0
 
-[node name="detailedStatsWindow" type="Control" parent="detailsWindow" unique_id=634421286 node_paths=PackedStringArray("nightName", "graph", "nightInterruptions", "sleepDuration", "sleepQuality")]
+[node name="detailedStatsWindow" type="Control" parent="detailsWindow" unique_id=634421286 node_paths=PackedStringArray("nightName", "graph", "nightInterruptions", "sleepDuration", "durationBeforeFallingAsleep", "sleepQuality")]
 layout_mode = 1
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -219,6 +219,7 @@ nightName = NodePath("Panel/nightName")
 graph = NodePath("Panel/Graph")
 nightInterruptions = NodePath("Panel/nightInterruptions")
 sleepDuration = NodePath("Panel/sleepDuration")
+durationBeforeFallingAsleep = NodePath("Panel/durationBeforeFallingAsleep")
 sleepQuality = NodePath("Panel/sleepQuality")
 
 [node name="elementResizer" type="Node" parent="detailsWindow/detailedStatsWindow" unique_id=1942971383 node_paths=PackedStringArray("screen")]
@@ -269,6 +270,14 @@ offset_left = 37.0
 offset_top = 690.0
 offset_right = 1036.0
 offset_bottom = 761.0
+theme_override_font_sizes/font_size = 32
+
+[node name="durationBeforeFallingAsleep" type="Label" parent="detailsWindow/detailedStatsWindow/Panel" unique_id=1059773941]
+layout_mode = 0
+offset_left = 37.0
+offset_top = 764.0
+offset_right = 1036.0
+offset_bottom = 835.0
 theme_override_font_sizes/font_size = 32
 
 [node name="sleepQuality" type="Label" parent="detailsWindow/detailedStatsWindow/Panel" unique_id=1825494483]
