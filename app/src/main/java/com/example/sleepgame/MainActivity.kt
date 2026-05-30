@@ -43,7 +43,6 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
-import kotlin.math.round
 
 class MainActivity: AppCompatActivity(), GodotHost {
     private lateinit var godotFragment: GodotFragment
@@ -152,80 +151,73 @@ class MainActivity: AppCompatActivity(), GodotHost {
     }
 }
 
-data class SleepPeriodInfo(
-    val periodId: Int,
-    val quality: Int,
-    val records: MutableList<Database.SleepRecord>
-)
-
-val minimumSleepTime = Duration.ofMinutes(10)
-val timeToFallAsleep = Duration.ofMinutes(15)
-
 data class CalculatedSleepPeriodData(
     val totalSleepDuration: Duration,
     var firstFallAsleep: Instant?,
     var wakeUp: Instant?,
-    var nonSleepRanges: List<Array<Instant>>,
+    var nonSleepRanges: List<NonSleepRange>,
 )
 
+data class NonSleepRange(var begin: Instant, var end: Instant, var timeToFallAsleep: Duration, var minimumSleepDuration: Duration)
+
 fun calculateSleepPeriodData(records: Iterable<Database.SleepRecord>): CalculatedSleepPeriodData {
-    val nonSleepRanges = mutableListOf<Array<Instant>>()
+    val nonSleepRanges = mutableListOf<NonSleepRange>()
     var totalSleepDuration = Duration.ZERO
     var firstFallAsleep: Instant? = null
     var wakeUp: Instant? = null
 
     var initialFallAsleepPhase = true // Only "period_begin" or "fall_asleep" were seen before
-    var lastFallAsleepTime: Instant? = null
 
-    val accumulateSleepUntil = fun(until: Instant) {
-        val fallAsleep = lastFallAsleepTime
-        if(fallAsleep == null) {
+    val accumulateSleepUntil = fun(until: Instant, timeToFallAsleep: Duration, minimumSleepDuration: Duration) {
+        val lastPeriod = nonSleepRanges.lastOrNull()
+        if(lastPeriod == null) {
             Log.w("calculateSleepPeriodNonSleepRanges", "Invalid state at $until")
             return
         }
 
-        val begin = fallAsleep + timeToFallAsleep
+        val begin = lastPeriod.end + lastPeriod.timeToFallAsleep
         val sleepTime = Duration.between(begin, until)
-        if(sleepTime >= minimumSleepTime) {
+        if(sleepTime >= lastPeriod.minimumSleepDuration) {
             totalSleepDuration += sleepTime
-            nonSleepRanges.add(arrayOf(until, until))
+            nonSleepRanges.add(NonSleepRange(until, until, timeToFallAsleep, minimumSleepDuration))
             if(firstFallAsleep == null) firstFallAsleep = begin
         }
         else {
-            nonSleepRanges.last()[1] = until
+            lastPeriod.end = until
+            lastPeriod.timeToFallAsleep = timeToFallAsleep
+            lastPeriod.minimumSleepDuration = minimumSleepDuration
         }
     }
 
     for(record in records) {
         when(record.type) {
             "period_begin", "fall_asleep" -> {
+                val time = record.recordedTime.toInstant()
                 if(initialFallAsleepPhase) {
-                    lastFallAsleepTime = record.recordedTime.toInstant()
-
                     if(nonSleepRanges.isEmpty()) {
-                        nonSleepRanges.add(arrayOf(lastFallAsleepTime, lastFallAsleepTime))
+                        nonSleepRanges.add(NonSleepRange(time, time, record.timeToFallAsleep, record.minimumSleepDuration))
                     }
                     else {
-                        nonSleepRanges.last()[1] = lastFallAsleepTime
+                        val lastPeriod = nonSleepRanges.last()
+                        lastPeriod.end = time
+                        lastPeriod.timeToFallAsleep = record.timeToFallAsleep
+                        lastPeriod.minimumSleepDuration = record.minimumSleepDuration
                     }
                 }
                 else {
-                    val until = record.recordedTime.toInstant()
-                    accumulateSleepUntil(until)
-                    lastFallAsleepTime = until
+                    accumulateSleepUntil(time, record.timeToFallAsleep, record.minimumSleepDuration)
                 }
             }
             "interruption" -> {
                 initialFallAsleepPhase = false
-                val until = record.recordedTime.toInstant()
-                accumulateSleepUntil(until)
-                lastFallAsleepTime = until
+                val time = record.recordedTime.toInstant()
+                accumulateSleepUntil(time, record.timeToFallAsleep, record.minimumSleepDuration)
             }
             "wake_up", "period_end" -> {
                 initialFallAsleepPhase = false
-                val until = record.recordedTime.toInstant()
-                wakeUp = until
-                accumulateSleepUntil(until)
+                val time = record.recordedTime.toInstant()
+                wakeUp = time
+                accumulateSleepUntil(time, record.timeToFallAsleep, record.minimumSleepDuration)
                 break
             }
             else -> {
@@ -234,7 +226,7 @@ fun calculateSleepPeriodData(records: Iterable<Database.SleepRecord>): Calculate
         }
     }
 
-    if(!nonSleepRanges.isEmpty() && nonSleepRanges.last()[0] === wakeUp) {
+    if(!nonSleepRanges.isEmpty() && nonSleepRanges.last().begin === wakeUp) {
         nonSleepRanges.removeAt(nonSleepRanges.size - 1)
     }
 
@@ -262,7 +254,8 @@ fun makeSleepPeriodDataDict(periodId: Int, info: CalculatedSleepPeriodData, qual
     )
     result["interruption_count"] = max(0, info.nonSleepRanges.size - 1)
     if(!info.nonSleepRanges.isEmpty()) {
-        result["duration_before_falling_asleep"] = durationSecToString(Duration.between(info.nonSleepRanges[0][0], info.nonSleepRanges[0][1] + timeToFallAsleep).seconds)
+        val range = info.nonSleepRanges[0]
+        result["duration_before_falling_asleep"] = durationSecToString(Duration.between(range.begin, range.end + range.timeToFallAsleep).seconds)
     }
     else {
         result["duration_before_falling_asleep"] = "N/A"
@@ -349,10 +342,10 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
 
         var nonSleepPolygonCount = 0
         for(range in graphData.nonSleepRanges) {
-            val rangeBegin = range[0]
-            val rangeEnd = range[1]
+            val rangeBegin = range.begin
+            val rangeEnd = range.end
 
-            var smoothEnd = rangeEnd + timeToFallAsleep
+            var smoothEnd = rangeEnd + range.timeToFallAsleep
             var smoothEndValue = 0.0
             // NOTE: currently, last record is always a wake up/period end record,
             // and this logic relies on that.
@@ -507,13 +500,13 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
     @UsedByGodot
     fun clickBed() {
         val db = Database(context)
-        db.startSleepPeriod(getCurrentTime())
+        db.startSleepPeriod(Database.SleepRecordInput(getCurrentTime(), defaultTimeToFallAsleepMinutes, defaultMinimumSleepDurationMinutes))
         sleepControlsUpdate(activity ?: context)
     }
     @UsedByGodot
     fun clickAlarmClock() {
         val db = Database(context)
-        db.endSleepPeriod(getCurrentTime())
+        db.endSleepPeriod(Database.SleepRecordInput(getCurrentTime(), defaultTimeToFallAsleepMinutes, defaultMinimumSleepDurationMinutes))
         sleepControlsUpdate(activity ?: context)
     }
 
@@ -555,20 +548,23 @@ fun durationSecToString(value: Long): String {
     return "$sign$hours ч. $minutes мин. $seconds сек."
 }
 
+val defaultTimeToFallAsleepMinutes = 15L
+val defaultMinimumSleepDurationMinutes = 10L
+
 class SleepNotificationActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val db = Database(context)
         when (intent.action) {
             actionRecordWakeUp -> {
-                db.recordWakeUp(getCurrentTime())
+                db.recordWakeUp(Database.SleepRecordInput(getCurrentTime(), defaultTimeToFallAsleepMinutes, defaultMinimumSleepDurationMinutes))
                 sleepControlsUpdate(context)
             }
             actionRecordSleepInterruption -> {
-                db.recordSleepInterruption(getCurrentTime())
+                db.recordSleepInterruption(Database.SleepRecordInput(getCurrentTime(), defaultTimeToFallAsleepMinutes, defaultMinimumSleepDurationMinutes))
                 sleepControlsUpdate(context)
             }
             actionRecordFallAsleep -> {
-                db.recordFallAsleep(getCurrentTime())
+                db.recordFallAsleep(Database.SleepRecordInput(getCurrentTime(), defaultTimeToFallAsleepMinutes, defaultMinimumSleepDurationMinutes))
                 sleepControlsUpdate(context)
             }
         }

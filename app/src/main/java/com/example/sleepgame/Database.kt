@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.core.database.getIntOrNull
 import androidx.core.database.sqlite.transaction
 import java.io.File
+import java.time.Duration
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
@@ -59,6 +60,11 @@ class Database {
                 db.execSQL("insert into sleep_data_version(version) values (1)")
                 db.version = 3
             }
+            if(db.version == 3) {
+                db.execSQL("alter table sleep_records add column time_to_fall_asleep_minutes integer not null default 15")
+                db.execSQL("alter table sleep_records add column minimum_sleep_duration_minutes integer not null default 10")
+                db.version = 4
+            }
         }
     }
 
@@ -73,8 +79,14 @@ class Database {
         db.execSQL("update sleep_data_version set version = version + 1")
     }
 
-    fun startSleepPeriod(recordedAt: ZonedDateTime): Boolean {
-        val time = recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
+    data class SleepRecordInput(
+        val recordedAt: ZonedDateTime,
+        val timeToFallAsleepMinutes: Long,
+        val minimumSleepDurationMinutes: Long
+    )
+
+    fun startSleepPeriod(input: SleepRecordInput): Boolean {
+        val time = input.recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         return db.transaction(exclusive = true) {
             val curPeriod = getCurrentSleepPeriod()
@@ -85,8 +97,8 @@ class Database {
 
                 val id = curPeriod.id + 1
                 db.execSQL(
-                    "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
-                    arrayOf(id, "period_begin", time)
+                    "insert into sleep_records(period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes) values(?, ?, ?, ?, ?)",
+                    arrayOf(id, "period_begin", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
                 )
                 bumpSleepDataVersion()
 
@@ -99,8 +111,8 @@ class Database {
         }
     }
 
-    fun endSleepPeriod(recordedAt: ZonedDateTime): Boolean {
-        val time = recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
+    fun endSleepPeriod(input: SleepRecordInput): Boolean {
+        val time = input.recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         return db.transaction(exclusive = true) {
             val curPeriod = getCurrentSleepPeriod()
@@ -110,8 +122,8 @@ class Database {
                 Log.d(TAG, "Ending current period")
 
                 db.execSQL(
-                    "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
-                    arrayOf(curPeriod.id, "period_end", time)
+                    "insert into sleep_records(period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes) values(?, ?, ?, ?, ?)",
+                    arrayOf(curPeriod.id, "period_end", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
                 )
                 bumpSleepDataVersion()
 
@@ -123,10 +135,10 @@ class Database {
             }
         }
     }
-    fun recordWakeUp(recordedAt: ZonedDateTime) {
+    fun recordWakeUp(input: SleepRecordInput) {
         Log.d(TAG, "recordFallAsleep")
 
-        val time = recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
+        val time = input.recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         db.transaction(exclusive = true) {
             val curPeriod = getCurrentSleepPeriod()
@@ -136,17 +148,17 @@ class Database {
             }
 
             db.execSQL(
-                "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
-                arrayOf(curPeriod.id, "wake_up", time)
+                "insert into sleep_records(period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes) values(?, ?, ?, ?, ?)",
+                arrayOf(curPeriod.id, "wake_up", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
             )
             bumpSleepDataVersion()
         }
     }
 
-    fun recordSleepInterruption(recordedAt: ZonedDateTime) {
+    fun recordSleepInterruption(input: SleepRecordInput) {
         Log.d(TAG, "recordSleepInterruption")
 
-        val time = recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
+        val time = input.recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         db.transaction(exclusive = true) {
             val curPeriod = getCurrentSleepPeriod()
@@ -156,17 +168,17 @@ class Database {
             }
 
             db.execSQL(
-                "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
-                arrayOf(curPeriod.id, "interruption", time)
+                "insert into sleep_records(period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes) values(?, ?, ?, ?, ?)",
+                arrayOf(curPeriod.id, "interruption", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
             )
             bumpSleepDataVersion()
         }
     }
 
-    fun recordFallAsleep(recordedAt: ZonedDateTime) {
+    fun recordFallAsleep(input: SleepRecordInput) {
         Log.d(TAG, "recordFallAsleep")
 
-        val time = recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
+        val time = input.recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         db.transaction(exclusive = true) {
             val curPeriod = getCurrentSleepPeriod()
@@ -176,8 +188,8 @@ class Database {
             }
 
             db.execSQL(
-                "insert into sleep_records(period_id, type, recorded_time) values(?, ?, ?)",
-                arrayOf(curPeriod.id, "fall_asleep", time)
+                "insert into sleep_records(period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes) values(?, ?, ?, ?, ?)",
+                arrayOf(curPeriod.id, "fall_asleep", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
             )
             bumpSleepDataVersion()
         }
@@ -193,13 +205,15 @@ class Database {
     }
 
     fun getAllRecords(): MutableList<SleepRecord> {
-        return db.rawQuery("select period_id, type, recorded_time from sleep_records", arrayOf()).use {
+        return db.rawQuery("select period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes from sleep_records", arrayOf()).use {
             val result = mutableListOf<SleepRecord>()
             while(it.moveToNext()) {
                 result.add(SleepRecord(
                     it.getInt(0),
                     it.getString(1),
-                    ZonedDateTime.parse(it.getString(2))
+                    ZonedDateTime.parse(it.getString(2)),
+                    Duration.ofMinutes(it.getLong(3)),
+                    Duration.ofMinutes(it.getLong(4)),
                 ))
             }
             result
@@ -218,7 +232,7 @@ class Database {
 
     fun getAllRecordsForPeriod(periodId: Int): MutableList<SleepRecord> {
         return db.rawQuery(
-            "select type, recorded_time from sleep_records where period_id = ?",
+            "select type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes from sleep_records where period_id = ?",
             arrayOf("" + periodId)
         ).use {
             val result = mutableListOf<SleepRecord>()
@@ -226,14 +240,16 @@ class Database {
                 result.add(SleepRecord(
                     periodId,
                     it.getString(0),
-                    ZonedDateTime.parse(it.getString(1))
+                    ZonedDateTime.parse(it.getString(1)),
+                    Duration.ofMinutes(it.getLong(2)),
+                    Duration.ofMinutes(it.getLong(3)),
                 ))
             }
             result
         }
     }
 
-    data class SleepRecord(val periodId: Int, val type: String, val recordedTime: ZonedDateTime)
+    data class SleepRecord(val periodId: Int, val type: String, val recordedTime: ZonedDateTime, val timeToFallAsleep: Duration, val minimumSleepDuration: Duration)
 
     data class SleepPeriod(val id: Int, val ended: Boolean)
 
