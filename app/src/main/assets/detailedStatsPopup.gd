@@ -7,6 +7,7 @@ class_name DetailedStatsWindow
 @export var sleepDuration: Label
 @export var durationBeforeFallingAsleep: Label
 @export var sleepQuality: Label
+@export var sleepBalance: Label
 
 func _ready() -> void:
 	close()
@@ -18,6 +19,7 @@ func open_with_data(data: Dictionary) -> void:
 	sleepDuration.text = "Время сна: " + data["duration"]
 	durationBeforeFallingAsleep.text = "Время лежания в кровати: " + data["duration_before_falling_asleep"]
 	sleepQuality.text = "Качество сна: " + data["quality"]
+	sleepQuality.text = "Сонный долг: " + data["sleep_balance"]
 	open()
 
 func _on_button_pressed() -> void:

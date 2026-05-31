@@ -204,7 +204,7 @@ offset_top = -43.0
 offset_right = 3656.0
 offset_bottom = -43.0
 
-[node name="detailedStatsWindow" type="Control" parent="detailsWindow" unique_id=634421286 node_paths=PackedStringArray("nightName", "graph", "nightInterruptions", "sleepDuration", "durationBeforeFallingAsleep", "sleepQuality")]
+[node name="detailedStatsWindow" type="Control" parent="detailsWindow" unique_id=634421286 node_paths=PackedStringArray("nightName", "graph", "nightInterruptions", "sleepDuration", "durationBeforeFallingAsleep", "sleepQuality", "sleepBalance")]
 layout_mode = 1
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -221,6 +221,7 @@ nightInterruptions = NodePath("Panel/nightInterruptions")
 sleepDuration = NodePath("Panel/sleepDuration")
 durationBeforeFallingAsleep = NodePath("Panel/durationBeforeFallingAsleep")
 sleepQuality = NodePath("Panel/sleepQuality")
+sleepBalance = NodePath("Panel/sleepBalance")
 
 [node name="elementResizer" type="Node" parent="detailsWindow/detailedStatsWindow" unique_id=1942971383 node_paths=PackedStringArray("screen")]
 script = ExtResource("11_5tkv4")
@@ -286,6 +287,14 @@ offset_left = 37.0
 offset_top = 814.0
 offset_right = 1036.0
 offset_bottom = 885.0
+theme_override_font_sizes/font_size = 32
+
+[node name="sleepBalance" type="Label" parent="detailsWindow/detailedStatsWindow/Panel" unique_id=667001686]
+layout_mode = 0
+offset_left = 37.0
+offset_top = 895.0
+offset_right = 1036.0
+offset_bottom = 966.0
 theme_override_font_sizes/font_size = 32
 
 [connection signal="pressed" from="bedroom/SleepButton" to="bedroom/SleepButton" method="_on_pressed"]

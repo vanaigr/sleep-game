@@ -171,7 +171,8 @@ fun makeSleepPeriodDataDict(info: SavedSleepPeriodData): Dictionary {
         DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(Locale.getDefault())
     )
     result["interruption_count"] = info.interruptionCount
-    result["duration_before_falling_asleep"] = durationSecToString(Duration.from(info.durationBeforeFallingAsleep).seconds)
+    result["duration_before_falling_asleep"] = durationSecToString(info.durationBeforeFallingAsleep.seconds)
+    result["sleep_balance"] = durationSecToString(info.sleepBalance.seconds)
 
     return result
 }
