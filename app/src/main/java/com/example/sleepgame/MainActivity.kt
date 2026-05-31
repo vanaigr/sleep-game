@@ -23,6 +23,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.database.getIntOrNull
+import androidx.core.database.getStringOrNull
 import androidx.fragment.app.DialogFragment
 import com.example.sleepgame.MainActivity.Companion.CHANNEL_ID
 import com.example.sleepgame.MainActivity.Companion.sleepControlsNotificationId
@@ -42,7 +43,6 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.floor
-import kotlin.math.max
 
 class MainActivity: AppCompatActivity(), GodotHost {
     private lateinit var godotFragment: GodotFragment
@@ -151,95 +151,13 @@ class MainActivity: AppCompatActivity(), GodotHost {
     }
 }
 
-data class CalculatedSleepPeriodData(
-    val totalSleepDuration: Duration,
-    var firstFallAsleep: Instant?,
-    var wakeUp: Instant?,
-    var nonSleepRanges: List<NonSleepRange>,
-)
-
-data class NonSleepRange(var begin: Instant, var end: Instant, var timeToFallAsleep: Duration, var minimumSleepDuration: Duration)
-
-fun calculateSleepPeriodData(records: Iterable<Database.SleepRecord>): CalculatedSleepPeriodData {
-    val nonSleepRanges = mutableListOf<NonSleepRange>()
-    var totalSleepDuration = Duration.ZERO
-    var firstFallAsleep: Instant? = null
-    var wakeUp: Instant? = null
-
-    var initialFallAsleepPhase = true // Only "period_begin" or "fall_asleep" were seen before
-
-    val accumulateSleepUntil = fun(until: Instant, timeToFallAsleep: Duration, minimumSleepDuration: Duration) {
-        val lastPeriod = nonSleepRanges.lastOrNull()
-        if(lastPeriod == null) {
-            Log.w("calculateSleepPeriodNonSleepRanges", "Invalid state at $until")
-            return
-        }
-
-        val begin = lastPeriod.end + lastPeriod.timeToFallAsleep
-        val sleepTime = Duration.between(begin, until)
-        if(sleepTime >= lastPeriod.minimumSleepDuration) {
-            totalSleepDuration += sleepTime
-            nonSleepRanges.add(NonSleepRange(until, until, timeToFallAsleep, minimumSleepDuration))
-            if(firstFallAsleep == null) firstFallAsleep = begin
-        }
-        else {
-            lastPeriod.end = until
-            lastPeriod.timeToFallAsleep = timeToFallAsleep
-            lastPeriod.minimumSleepDuration = minimumSleepDuration
-        }
-    }
-
-    for(record in records) {
-        when(record.type) {
-            "period_begin", "fall_asleep" -> {
-                val time = record.recordedTime.toInstant()
-                if(initialFallAsleepPhase) {
-                    if(nonSleepRanges.isEmpty()) {
-                        nonSleepRanges.add(NonSleepRange(time, time, record.timeToFallAsleep, record.minimumSleepDuration))
-                    }
-                    else {
-                        val lastPeriod = nonSleepRanges.last()
-                        lastPeriod.end = time
-                        lastPeriod.timeToFallAsleep = record.timeToFallAsleep
-                        lastPeriod.minimumSleepDuration = record.minimumSleepDuration
-                    }
-                }
-                else {
-                    accumulateSleepUntil(time, record.timeToFallAsleep, record.minimumSleepDuration)
-                }
-            }
-            "interruption" -> {
-                initialFallAsleepPhase = false
-                val time = record.recordedTime.toInstant()
-                accumulateSleepUntil(time, record.timeToFallAsleep, record.minimumSleepDuration)
-            }
-            "wake_up", "period_end" -> {
-                initialFallAsleepPhase = false
-                val time = record.recordedTime.toInstant()
-                wakeUp = time
-                accumulateSleepUntil(time, Duration.ZERO, record.minimumSleepDuration)
-                break
-            }
-            else -> {
-                Log.d("calculateSleepPeriodNonSleepRanges", "Unknown record type $record")
-            }
-        }
-    }
-
-    if(!nonSleepRanges.isEmpty() && nonSleepRanges.last().begin === wakeUp) {
-        nonSleepRanges.removeAt(nonSleepRanges.size - 1)
-    }
-
-    return CalculatedSleepPeriodData(totalSleepDuration, firstFallAsleep, wakeUp, nonSleepRanges)
-}
-
-fun makeSleepPeriodDataDict(periodId: Int, info: CalculatedSleepPeriodData, quality: Int): Dictionary {
+fun makeSleepPeriodDataDict(info: SavedSleepPeriodData): Dictionary {
     val currentTimezone = getCurrentTime().zone
 
     val result = Dictionary()
-    result["period_id"] = periodId
+    result["period_id"] = info.periodId
     result["duration"] = durationSecToString(info.totalSleepDuration.seconds)
-    result["quality"] = when(quality) {
+    result["quality"] = when(info.quality) {
         1 -> "Не спал"
         2 -> "Ужасно"
         3 -> "Не очень"
@@ -247,19 +165,13 @@ fun makeSleepPeriodDataDict(periodId: Int, info: CalculatedSleepPeriodData, qual
         5 -> "Замечательно"
         else -> "Не записано"
     }
-    result["begin_time"] = info.firstFallAsleep?.atZone(currentTimezone)?.toLocalTime()?.truncatedTo(ChronoUnit.SECONDS).toString()
+    result["begin_time"] = info.fallAsleep?.atZone(currentTimezone)?.toLocalTime()?.truncatedTo(ChronoUnit.SECONDS).toString()
     result["end_time"] = info.wakeUp?.atZone(currentTimezone)?.toLocalTime()?.truncatedTo(ChronoUnit.SECONDS).toString()
     result["date"] = info.wakeUp?.atZone(currentTimezone)?.toLocalDate()?.format(
         DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(Locale.getDefault())
     )
-    result["interruption_count"] = max(0, info.nonSleepRanges.size - 1)
-    if(!info.nonSleepRanges.isEmpty()) {
-        val range = info.nonSleepRanges[0]
-        result["duration_before_falling_asleep"] = durationSecToString(Duration.between(range.begin, range.end + range.timeToFallAsleep).seconds)
-    }
-    else {
-        result["duration_before_falling_asleep"] = "N/A"
-    }
+    result["interruption_count"] = info.interruptionCount
+    result["duration_before_falling_asleep"] = durationSecToString(Duration.from(info.durationBeforeFallingAsleep).seconds)
 
     return result
 }
@@ -274,6 +186,34 @@ fun roundByHours(time: ZonedDateTime, roundByHours: Int, ceil: Boolean): ZonedDa
         else floorOffset + Duration.ofHours(roundByHours.toLong())
     }
     return startOfDay.plus(newOffset)
+}
+
+val completePeriodQuery = """
+    select
+        complete_sleep_periods.period_id,
+        sleep_quality.quality,
+        fall_asleep_time,
+        wake_up_time,
+        sleep_duration,
+        duration_before_falling_asleep,
+        interruption_count integer,
+        sleep_balance_duration
+    from complete_sleep_periods
+    left join sleep_quality
+    on complete_sleep_periods.period_id = sleep_quality.period_id
+""".trimIndent()
+
+fun decodeCompletePeriod(it: Cursor): SavedSleepPeriodData {
+    return SavedSleepPeriodData(
+        it.getInt(0),
+        it.getIntOrNull(1) ?: 0,
+        it.getStringOrNull(2)?.let {decodeInstant(it) },
+        it.getStringOrNull(3)?.let {decodeInstant(it) },
+        decodeDuration(it.getString(4)),
+        decodeDuration(it.getString(5)),
+        it.getInt(6),
+        decodeDuration(it.getString(7)),
+    )
 }
 
 class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
@@ -341,39 +281,19 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
         }
 
         var nonSleepPolygonCount = 0
-        for(range in graphData.nonSleepRanges) {
+        for(rangeI in 1 until (graphData.nonSleepRanges.size - 1)) {
+            val range = graphData.nonSleepRanges[rangeI]
             val rangeBegin = range.begin
             val rangeEnd = range.end
 
-            var smoothEnd = rangeEnd + range.timeToFallAsleep
-            var smoothEndValue = 0.0
-            // NOTE: currently, last record is always a wake up/period end record,
-            // and this logic relies on that.
-            if(smoothEnd > endInstant) {
-                if(endInstant == rangeEnd) {
-                    smoothEndValue = 0.0
-                    smoothEnd = endInstant
-                }
-                else {
-                    smoothEndValue =
-                        Duration.between(rangeEnd, smoothEnd).seconds.toDouble() / Duration.between(
-                            rangeEnd,
-                            endInstant
-                        ).seconds.toDouble()
-                    smoothEnd = endInstant
-                }
-            }
-
             val beginX = timeToX(rangeBegin)
             val endX = timeToX(rangeEnd)
-            val smoothEndX = timeToX(smoothEnd)
 
             val points = mutableListOf<Array<Double>>()
             points.add(arrayOf(beginX, 0.0))
             points.add(arrayOf(beginX, 1.0))
             points.add(arrayOf(endX, 1.0))
-            points.add(arrayOf(smoothEndX, smoothEndValue))
-            if(smoothEndValue != 0.0) points.add(arrayOf(smoothEndX, 0.0))
+            points.add(arrayOf(endX, 0.0))
 
             var i = 0
             while(i != points.size) {
@@ -398,14 +318,14 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
         }
         result["non_sleep_polygon_count"] = nonSleepPolygonCount
 
-        if(graphData.firstFallAsleep != null) {
-            result["fall_asleep_position"] = timeToX(graphData.firstFallAsleep!!)
-            result["fall_asleep_label"] = graphData.firstFallAsleep!!.atZone(currentTimezone).toLocalTime()
+        if(graphData.fallAsleep != null) {
+            result["fall_asleep_position"] = timeToX(graphData.fallAsleep)
+            result["fall_asleep_label"] = graphData.fallAsleep.atZone(currentTimezone).toLocalTime()
                 .truncatedTo(ChronoUnit.MINUTES).toString()
         }
         if(graphData.wakeUp != null) {
-            result["wake_up_position"] = timeToX(graphData.wakeUp!!)
-            result["wake_up_label"] = graphData.wakeUp!!.atZone(currentTimezone).toLocalTime()
+            result["wake_up_position"] = timeToX(graphData.wakeUp)
+            result["wake_up_label"] = graphData.wakeUp.atZone(currentTimezone).toLocalTime()
                 .truncatedTo(ChronoUnit.MINUTES).toString()
         }
 
@@ -416,30 +336,16 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
     @UsedByGodot
     fun getLastCompletePeriodStats(): Dictionary? {
         val db = Database(context)
-
         val lastCompletedPeriod = db.db.rawQuery(
-            "select max(period_id) from sleep_records where type = 'wake_up' or type = 'period_end' ",
+            "$completePeriodQuery order by complete_sleep_periods.period_id desc limit 1",
             arrayOf(),
         ).use {
             if(!it.moveToNext()) null
-            else it.getInt(0)
+            else decodeCompletePeriod(it)
         }
         if(lastCompletedPeriod == null) return null
 
-        val quality = db.db.rawQuery(
-            "select quality from sleep_quality where period_id = ? limit 1",
-            arrayOf("" + lastCompletedPeriod),
-        ).use {
-            if(!it.moveToNext()) 0
-            else it.getInt(0)
-        }
-
-        val records = db.getAllRecordsForPeriod(lastCompletedPeriod)
-        records.sortWith { a, b -> a.recordedTime.compareTo(b.recordedTime) }
-
-        val info = calculateSleepPeriodData(records)
-
-        return makeSleepPeriodDataDict(lastCompletedPeriod, info, quality)
+        return makeSleepPeriodDataDict(lastCompletedPeriod)
     }
 
     @UsedByGodot
@@ -450,28 +356,11 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
     @UsedByGodot
     fun getAllPeriodsStats(): Array<Dictionary> {
         val db = Database(context)
-
-        val allQuality = db.getQualityByPeriodId()
-        val allRecords = db.getAllRecords()
-        val recordsByPeriod = HashMap<Int, MutableList<Database.SleepRecord>>()
-        for(record in allRecords) {
-            val list = recordsByPeriod.getOrPut(record.periodId) { mutableListOf() }
-            list.add(record)
+        return db.db.rawQuery("$completePeriodQuery order by complete_sleep_periods.period_id desc", arrayOf()).use {
+            val infos = mutableListOf<Dictionary>()
+            while(it.moveToNext()) infos.add(makeSleepPeriodDataDict(decodeCompletePeriod(it)))
+            infos.toTypedArray()
         }
-
-        val periodIds = recordsByPeriod.keys.toIntArray()
-        periodIds.sortDescending()
-
-        val infos = mutableListOf<Dictionary>()
-        for(periodId in periodIds) {
-            val quality = allQuality[periodId] ?: 0
-            val records = recordsByPeriod[periodId]!!
-            records.sortWith { a, b -> a.recordedTime.compareTo(b.recordedTime) }
-            val stats = calculateSleepPeriodData(records)
-            infos.add(makeSleepPeriodDataDict(periodId, stats, quality))
-        }
-
-        return infos.toTypedArray()
     }
 
     @UsedByGodot
