@@ -23,7 +23,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.database.getIntOrNull
-import androidx.core.database.getStringOrNull
 import androidx.fragment.app.DialogFragment
 import com.example.sleepgame.MainActivity.Companion.CHANNEL_ID
 import com.example.sleepgame.MainActivity.Companion.sleepControlsNotificationId
@@ -189,34 +188,6 @@ fun roundByHours(time: ZonedDateTime, roundByHours: Int, ceil: Boolean): ZonedDa
     return startOfDay.plus(newOffset)
 }
 
-val completePeriodQuery = """
-    select
-        complete_sleep_periods.period_id,
-        sleep_quality.quality,
-        fall_asleep_time,
-        wake_up_time,
-        sleep_duration,
-        duration_before_falling_asleep,
-        interruption_count integer,
-        sleep_balance_duration
-    from complete_sleep_periods
-    left join sleep_quality
-    on complete_sleep_periods.period_id = sleep_quality.period_id
-""".trimIndent()
-
-fun decodeCompletePeriod(it: Cursor): SavedSleepPeriodData {
-    return SavedSleepPeriodData(
-        it.getInt(0),
-        it.getIntOrNull(1) ?: 0,
-        it.getStringOrNull(2)?.let {decodeInstant(it) },
-        it.getStringOrNull(3)?.let {decodeInstant(it) },
-        decodeDuration(it.getString(4)),
-        decodeDuration(it.getString(5)),
-        it.getInt(6),
-        decodeDuration(it.getString(7)),
-    )
-}
-
 class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
     companion object {
         private val TAG = "BridgePlugin"
@@ -337,15 +308,7 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
     @UsedByGodot
     fun getLastCompletePeriodStats(): Dictionary? {
         val db = Database(context)
-        val lastCompletedPeriod = db.db.rawQuery(
-            "$completePeriodQuery order by complete_sleep_periods.period_id desc limit 1",
-            arrayOf(),
-        ).use {
-            if(!it.moveToNext()) null
-            else decodeCompletePeriod(it)
-        }
-        if(lastCompletedPeriod == null) return null
-
+        val lastCompletedPeriod = db.getLatestSleepPeriodData() ?: return null
         return makeSleepPeriodDataDict(lastCompletedPeriod)
     }
 
@@ -357,34 +320,7 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
     @UsedByGodot
     fun getAllPeriodsStats(): Array<Dictionary> {
         val db = Database(context)
-        return db.db.rawQuery("$completePeriodQuery order by complete_sleep_periods.period_id desc", arrayOf()).use {
-            val infos = mutableListOf<Dictionary>()
-            while(it.moveToNext()) infos.add(makeSleepPeriodDataDict(decodeCompletePeriod(it)))
-            infos.toTypedArray()
-        }
-    }
-
-    @UsedByGodot
-    fun query(sql: String, args: Array<String>): Array<Dictionary> {
-        val db = Database(context)
-        return db.db.rawQuery(sql, args).use {
-            val result = mutableListOf<Dictionary>()
-            while(it.moveToNext()) {
-                val row = Dictionary()
-                for (i in 0 until it.columnCount) {
-                    row[it.getColumnName(i)] = when (it.getType(i)) {
-                        Cursor.FIELD_TYPE_NULL    -> null
-                        Cursor.FIELD_TYPE_INTEGER -> it.getLong(i)
-                        Cursor.FIELD_TYPE_FLOAT   -> it.getDouble(i)
-                        Cursor.FIELD_TYPE_STRING  -> it.getString(i)
-                        Cursor.FIELD_TYPE_BLOB    -> it.getBlob(i)
-                        else -> it.getString(i)
-                    }
-                }
-                result.add(row)
-            }
-            result.toTypedArray()
-        }
+        return db.getAllSleepPeriodData().map { makeSleepPeriodDataDict(it) }.toTypedArray()
     }
 
     @UsedByGodot
@@ -398,6 +334,11 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
         val db = Database(context)
         db.endSleepPeriod(Database.SleepRecordInput(getCurrentTime(), defaultTimeToFallAsleepMinutes, defaultMinimumSleepDurationMinutes))
         sleepControlsUpdate(activity ?: context)
+    }
+    @UsedByGodot
+    fun deleteSleepPeriod(periodId: Int) {
+        val db = Database(context)
+        db.deleteSleepPeriod(periodId)
     }
 
     @UsedByGodot
@@ -468,7 +409,8 @@ class SleepNotificationActionReceiver : BroadcastReceiver() {
 }
 
 fun sleepControlsUpdate(context: Context) {
-    if(Database(context).getCurrentSleepPeriod().ended) sleepControlsHide(context)
+    val period = Database(context).getLatestSleepPeriod()
+    if(period == null || period.ended) sleepControlsHide(context)
     else sleepControlsShow(context)
 
     sleepQualityUpdate()
@@ -489,39 +431,8 @@ fun sleepQualityUpdate() {
         return
     }
 
-    val db = Database(activity).db
-
-    val curPeriodId = db.rawQuery("select max(period_id) from sleep_records", arrayOf()).use {
-        it.moveToNext()
-        it.getIntOrNull(0)
-    }
-    if(curPeriodId == null) {
-        Log.d(TAG, "Skipping: no current period")
-        return
-    }
-    Log.d(TAG, "Checking $curPeriodId")
-
-    val alreadyRecorded = db.rawQuery(
-        "select 1 from sleep_quality where period_id = ? limit 1",
-        arrayOf("" + curPeriodId)
-    ).use {
-        it.moveToNext()
-    }
-    if(alreadyRecorded) {
-        Log.d(TAG, "Skipping: already recorded")
-        return
-    }
-
-    val wokeUp = db.rawQuery(
-        "select 1 from sleep_records where period_id = ? and type in (?, ?) limit 1",
-        arrayOf("" + curPeriodId, "wake_up", "period_end")
-    ).use {
-        it.moveToNext()
-    }
-    if(!wokeUp) {
-        Log.d(TAG, "Skipping: haven't woken up")
-        return
-    }
+    val db = Database(activity)
+    val periodId = db.shouldShowQualityDialog() ?: return
 
     activity.runOnUiThread {
         val fm = activity.supportFragmentManager
@@ -530,7 +441,7 @@ fun sleepQualityUpdate() {
         oldDialog?.dismiss()
         fm.executePendingTransactions()
 
-        SleepQualityDialogFragment(curPeriodId)
+        SleepQualityDialogFragment(periodId)
             .show(fm, SleepQualityDialogFragment.TAG)
     }
 

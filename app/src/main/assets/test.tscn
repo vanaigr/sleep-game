@@ -297,8 +297,18 @@ offset_right = 1036.0
 offset_bottom = 966.0
 theme_override_font_sizes/font_size = 32
 
+[node name="Button" type="Button" parent="detailsWindow/detailedStatsWindow/Panel" unique_id=1413287473]
+layout_mode = 0
+offset_left = 856.0
+offset_top = 1707.0
+offset_right = 1056.0
+offset_bottom = 1907.0
+theme_override_font_sizes/font_size = 32
+text = "удалить"
+
 [connection signal="pressed" from="bedroom/SleepButton" to="bedroom/SleepButton" method="_on_pressed"]
 [connection signal="pressed" from="bedroom/WakeUpButton" to="bedroom/WakeUpButton" method="_on_pressed"]
 [connection signal="pressed" from="bedroom/bedroomToCellar" to="mainCamera/screenController" method="toCellar"]
 [connection signal="pressed" from="bedroom/debug/debugToggle" to="bedroom/debug/debugToggle" method="_on_pressed"]
 [connection signal="pressed" from="cellar/ScrollContainer/PanelContainer/VBoxContainer2/cellarToBedroom" to="mainCamera/screenController" method="toBedroom"]
+[connection signal="pressed" from="detailsWindow/detailedStatsWindow/Panel/Button" to="detailsWindow/detailedStatsWindow" method="_on_delete_pressed"]

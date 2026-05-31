@@ -18,7 +18,6 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-Database="*uid://bd2b6sreskeo4"
 ScreenStack="*uid://cjmiffi6w3jbn"
 CameraSize="*uid://cstldalilfc43"
 

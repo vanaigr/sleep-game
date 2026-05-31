@@ -2,9 +2,11 @@ package com.example.sleepgame
 
 import android.content.ContentValues
 import android.content.Context
+import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import androidx.core.database.getIntOrNull
+import androidx.core.database.getStringOrNull
 import androidx.core.database.sqlite.transaction
 import java.io.File
 import java.time.Duration
@@ -19,7 +21,7 @@ import java.time.format.DateTimeFormatter
 ///------------------------------------------///
 
 class Database {
-    val db: SQLiteDatabase
+    private val db: SQLiteDatabase
 
     constructor(context: Context) {
         db = SQLiteDatabase.openOrCreateDatabase(
@@ -74,6 +76,7 @@ class Database {
             }
              */
             if(db.version == 4) {
+                // Oops... should've been `sleep_periods` since they may actually be incomplete
                 db.execSQL("""
                     create table complete_sleep_periods(
                         period_id integer primary key,
@@ -95,6 +98,10 @@ class Database {
 
                 db.version = 5
             }
+            if(db.version == 5) {
+                db.execSQL("alter table complete_sleep_periods add column deleted integer not null default 0")
+                db.version = 6
+            }
         }
     }
 
@@ -104,7 +111,7 @@ class Database {
         val data = calculateSleepPeriodData(records)
 
         val lastSleepBalance = db.rawQuery(
-            "select sleep_balance_duration from complete_sleep_periods where period_id < ? order by period_id desc limit 1",
+            "select sleep_balance_duration from complete_sleep_periods where deleted = 0 and period_id < ? order by period_id desc limit 1",
             arrayOf("" + periodId)
         ).use {
             if(it.moveToNext()) decodeDuration(it.getString(0))
@@ -124,21 +131,21 @@ class Database {
                 put("duration_before_falling_asleep", encodeDuration(data.durationBeforeFallingAsleep))
                 put("interruption_count", data.interruptionCount)
                 put("sleep_balance_duration", encodeDuration(sleepBalance))
+                put("deleted", 0)
             },
             SQLiteDatabase.CONFLICT_REPLACE
         )
     }
 
-    fun updateSavedSleepPeriodsFrom(periodId: Int) {
+    fun updateSavedSleepPeriodsAfter(periodId: Int) {
         val periodIds = db.rawQuery(
-            "select period_id from complete_sleep_periods where period_id > ? order by period_id",
+            "select period_id from complete_sleep_periods where deleted = 0 and period_id > ? order by period_id",
             arrayOf("" + periodId)
         ).use {
             val result = mutableListOf<Int>()
             while(it.moveToNext()) result.add(it.getInt(0))
             result
         }
-        updateSavedSleepPeriod(periodId)
         for(periodId in periodIds) updateSavedSleepPeriod(periodId)
     }
 
@@ -163,19 +170,20 @@ class Database {
         val time = encodeZonedDateTime(input.recordedAt)
 
         return db.transaction(exclusive = true) {
-            val curPeriod = getCurrentSleepPeriod()
+            val curPeriod = getLatestSleepPeriod()
             Log.d(TAG, "Active row $curPeriod")
 
-            if(curPeriod.ended) {
+            if(curPeriod == null || curPeriod.ended) {
                 Log.d(TAG, "Starting new period")
 
-                val id = curPeriod.id + 1
+                val id = getNextPeriodId()
                 db.execSQL(
                     "insert into sleep_records(period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes) values(?, ?, ?, ?, ?)",
                     arrayOf(id, "period_begin", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
                 )
                 bumpSleepDataVersion()
-                updateSavedSleepPeriodsFrom(id)
+                updateSavedSleepPeriod(id)
+                updateSavedSleepPeriodsAfter(id)
 
                 true
             }
@@ -190,17 +198,18 @@ class Database {
         val time = input.recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         return db.transaction(exclusive = true) {
-            val curPeriod = getCurrentSleepPeriod()
+            val curPeriod = getLatestSleepPeriod()
             Log.d(TAG, "Active row $curPeriod")
 
-            if(!curPeriod.ended) {
+            if(curPeriod != null && !curPeriod.ended) {
                 Log.d(TAG, "Ending current period")
 
                 db.execSQL(
                     "insert into sleep_records(period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes) values(?, ?, ?, ?, ?)",
                     arrayOf(curPeriod.id, "period_end", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
                 )
-                updateSavedSleepPeriodsFrom(curPeriod.id)
+                updateSavedSleepPeriod(curPeriod.id)
+                updateSavedSleepPeriodsAfter(curPeriod.id)
                 bumpSleepDataVersion()
 
                 true
@@ -217,17 +226,18 @@ class Database {
         val time = input.recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         db.transaction(exclusive = true) {
-            val curPeriod = getCurrentSleepPeriod()
-            if(curPeriod.ended) {
-                Log.w(TAG, "Current period has ended and this action should not have been accessible")
-                // fallthrough
+            val curPeriod = getLatestSleepPeriod()
+            if(curPeriod == null || curPeriod.ended) {
+                Log.w(TAG, "Current period has ended/doesn't exist and this action should not have been accessible")
+                return
             }
 
             db.execSQL(
                 "insert into sleep_records(period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes) values(?, ?, ?, ?, ?)",
                 arrayOf(curPeriod.id, "wake_up", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
             )
-            updateSavedSleepPeriodsFrom(curPeriod.id)
+            updateSavedSleepPeriod(curPeriod.id)
+            updateSavedSleepPeriodsAfter(curPeriod.id)
             bumpSleepDataVersion()
         }
     }
@@ -238,17 +248,18 @@ class Database {
         val time = input.recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         db.transaction(exclusive = true) {
-            val curPeriod = getCurrentSleepPeriod()
-            if(curPeriod.ended) {
-                Log.w(TAG, "Current period has ended and this action should not have been accessible")
-                // fallthrough
+            val curPeriod = getLatestSleepPeriod()
+            if(curPeriod == null || curPeriod.ended) {
+                Log.w(TAG, "Current period has ended/doesn't exist and this action should not have been accessible")
+                return
             }
 
             db.execSQL(
                 "insert into sleep_records(period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes) values(?, ?, ?, ?, ?)",
                 arrayOf(curPeriod.id, "interruption", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
             )
-            updateSavedSleepPeriodsFrom(curPeriod.id)
+            updateSavedSleepPeriod(curPeriod.id)
+            updateSavedSleepPeriodsAfter(curPeriod.id)
             bumpSleepDataVersion()
         }
     }
@@ -259,17 +270,18 @@ class Database {
         val time = input.recordedAt.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
 
         db.transaction(exclusive = true) {
-            val curPeriod = getCurrentSleepPeriod()
-            if(curPeriod.ended) {
-                Log.w(TAG, "Current period has ended and this action should not have been accessible")
-                // fallthrough
+            val curPeriod = getLatestSleepPeriod()
+            if(curPeriod == null || curPeriod.ended) {
+                Log.w(TAG, "Current period has ended/doesn't exist and this action should not have been accessible")
+                return
             }
 
             db.execSQL(
                 "insert into sleep_records(period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes) values(?, ?, ?, ?, ?)",
                 arrayOf(curPeriod.id, "fall_asleep", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
             )
-            updateSavedSleepPeriodsFrom(curPeriod.id)
+            updateSavedSleepPeriod(curPeriod.id)
+            updateSavedSleepPeriodsAfter(curPeriod.id)
             bumpSleepDataVersion()
         }
     }
@@ -281,6 +293,15 @@ class Database {
         )
         bumpSleepDataVersion()
         Log.d(TAG, "Inserted quality record for $periodId: $quality")
+    }
+
+    fun deleteSleepPeriod(periodId: Int) {
+        // NOTE: if we add manually resetting sleep balance in the future this may overwrite it.
+        db.transaction(exclusive = true) {
+            db.execSQL("update complete_sleep_periods set deleted = 1 where period_id = ?", arrayOf(periodId))
+            updateSavedSleepPeriodsAfter(periodId)
+            bumpSleepDataVersion()
+        }
     }
 
     fun getAllRecordsForPeriod(periodId: Int): MutableList<SleepRecord> {
@@ -302,21 +323,12 @@ class Database {
         }
     }
 
-    fun getQualityForPeriod(periodId: Int): Int? {
-        return db.rawQuery("select quality from sleep_quality where period_id = ?", arrayOf()).use {
-            if(it.moveToNext()) it.getInt(0)
-            else null
-        }
-    }
-
-    fun getCurrentSleepPeriod(): SleepPeriod {
-        val curPeriodId = db.rawQuery("select max(period_id) from sleep_records", arrayOf()).use {
+    fun getLatestSleepPeriod(): SleepPeriod? {
+        val curPeriodId = db.rawQuery("select max(period_id) from complete_sleep_periods where deleted = 0", arrayOf()).use {
             it.moveToNext()
             it.getIntOrNull(0)
         }
-        if(curPeriodId == null) {
-            return SleepPeriod(0, true)
-        }
+        if(curPeriodId == null) return null
 
         val curPeriodEnded = db.rawQuery(
             "select count(*) from sleep_records where period_id = ? and type in (?, ?)",
@@ -326,6 +338,54 @@ class Database {
             it.getLong(0) != 0L
         }
         return SleepPeriod(curPeriodId, curPeriodEnded)
+    }
+
+    fun getNextPeriodId(): Int {
+        val curPeriodId = db.rawQuery("select max(period_id) from complete_sleep_periods", arrayOf()).use {
+            it.moveToNext()
+            it.getIntOrNull(0)
+        }
+        return (curPeriodId ?: 0) + 1
+    }
+
+    fun getLatestSleepPeriodData(): SavedSleepPeriodData? {
+        return db.rawQuery(
+            "$completePeriodQuery order by complete_sleep_periods.period_id desc limit 1",
+            arrayOf(),
+        ).use {
+            if(!it.moveToNext()) null
+            else decodeCompletePeriod(it)
+        }
+    }
+
+    fun getAllSleepPeriodData(): List<SavedSleepPeriodData> {
+        return db.rawQuery("$completePeriodQuery order by complete_sleep_periods.period_id desc", arrayOf()).use {
+            val infos = mutableListOf<SavedSleepPeriodData>()
+            while(it.moveToNext()) infos.add(decodeCompletePeriod(it))
+            infos
+        }
+    }
+
+    fun shouldShowQualityDialog(): Int? {
+        val curPeriodId = getLatestSleepPeriod()?.id ?: return null
+
+        val alreadyRecorded = db.rawQuery(
+            "select 1 from sleep_quality where period_id = ? limit 1",
+            arrayOf("" + curPeriodId)
+        ).use {
+            it.moveToNext()
+        }
+        if(alreadyRecorded) return null
+
+        val wokeUp = db.rawQuery(
+            "select 1 from sleep_records where period_id = ? and type in (?, ?) limit 1",
+            arrayOf("" + curPeriodId, "wake_up", "period_end")
+        ).use {
+            it.moveToNext()
+        }
+        if(!wokeUp) return null
+
+        return curPeriodId
     }
 
     companion object {
@@ -354,6 +414,35 @@ fun decodeZonedDateTime(it: String): ZonedDateTime {
 }
 fun decodeDuration(it: String): Duration {
     return Duration.parse(it)
+}
+
+private val completePeriodQuery = """
+    select
+        complete_sleep_periods.period_id,
+        sleep_quality.quality,
+        fall_asleep_time,
+        wake_up_time,
+        sleep_duration,
+        duration_before_falling_asleep,
+        interruption_count integer,
+        sleep_balance_duration
+    from complete_sleep_periods
+    left join sleep_quality
+    on complete_sleep_periods.period_id = sleep_quality.period_id
+    where deleted = 0
+""".trimIndent()
+
+private fun decodeCompletePeriod(it: Cursor): SavedSleepPeriodData {
+    return SavedSleepPeriodData(
+        it.getInt(0),
+        it.getIntOrNull(1) ?: 0,
+        it.getStringOrNull(2)?.let {decodeInstant(it) },
+        it.getStringOrNull(3)?.let {decodeInstant(it) },
+        decodeDuration(it.getString(4)),
+        decodeDuration(it.getString(5)),
+        it.getInt(6),
+        decodeDuration(it.getString(7)),
+    )
 }
 
 /*
