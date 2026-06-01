@@ -214,8 +214,6 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
         val currentTimezone = getCurrentTime().zone
         val begin = records[0].recordedTime.withZoneSameInstant(currentTimezone)
         val end = records.last().recordedTime.withZoneSameInstant(currentTimezone)
-        val endInstant = end.toInstant()
-
 
         var roundingHours = 1
         var roundedBegin: ZonedDateTime
@@ -255,16 +253,15 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
         var nonSleepPolygonCount = 0
         for(rangeI in 1 until (graphData.nonSleepRanges.size - 1)) {
             val range = graphData.nonSleepRanges[rangeI]
-            val rangeBegin = range.begin
-            val rangeEnd = range.end
 
-            val beginX = timeToX(rangeBegin)
-            val endX = timeToX(rangeEnd)
+            val beginX = timeToX(range.begin)
+            val lastBeginX = timeToX(range.lastBegin)
+            val endX = timeToX(range.end)
 
             val points = mutableListOf<Array<Double>>()
             points.add(arrayOf(beginX, 0.0))
             points.add(arrayOf(beginX, 1.0))
-            points.add(arrayOf(endX, 1.0))
+            points.add(arrayOf(lastBeginX, 1.0))
             points.add(arrayOf(endX, 0.0))
 
             var i = 0
