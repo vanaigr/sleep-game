@@ -89,12 +89,7 @@ class Database {
                     )
                 """.trimIndent())
 
-                val periodIds = db.rawQuery("select distinct period_id from sleep_records order by period_id", arrayOf()).use {
-                    val result = mutableListOf<Int>()
-                    while(it.moveToNext()) result.add(it.getInt(0))
-                    result
-                }
-                for(periodId in periodIds) updateSavedSleepPeriod(periodId)
+                updateAllSleepPeriods()
 
                 db.version = 5
             }
@@ -105,6 +100,7 @@ class Database {
             if(db.version == 6) {
                 db.execSQL("update sleep_records set minimum_sleep_duration_minutes = 15")
                 db.execSQL("update sleep_records set time_to_fall_asleep_minutes = 10 where \"type\" = 'interruption'")
+                updateAllSleepPeriods()
                 db.version = 7
             }
         }
@@ -147,6 +143,15 @@ class Database {
             "select period_id from complete_sleep_periods where deleted = 0 and period_id > ? order by period_id",
             arrayOf("" + periodId)
         ).use {
+            val result = mutableListOf<Int>()
+            while(it.moveToNext()) result.add(it.getInt(0))
+            result
+        }
+        for(periodId in periodIds) updateSavedSleepPeriod(periodId)
+    }
+
+    fun updateAllSleepPeriods() {
+        val periodIds = db.rawQuery("select distinct period_id from sleep_records order by period_id", arrayOf()).use {
             val result = mutableListOf<Int>()
             while(it.moveToNext()) result.add(it.getInt(0))
             result
