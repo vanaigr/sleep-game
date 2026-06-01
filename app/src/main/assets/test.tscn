@@ -16,6 +16,7 @@
 [ext_resource type="Script" uid="uid://dnf2mqf4jqj20" path="res://debugToggle.gd" id="12_0m0f1"]
 [ext_resource type="Script" uid="uid://lgc0sefys42i" path="res://statList.gd" id="13_b0q6j"]
 [ext_resource type="Script" uid="uid://7aa7nyrchhgb" path="res://detailedStatsPopup.gd" id="14_mhym6"]
+[ext_resource type="Script" uid="uid://cb1mbo8o8h0ch" path="res://sleepBalanceReset.gd" id="15_45l4g"]
 [ext_resource type="Script" uid="uid://ckleiwtlcm6or" path="res://sleepGraph.gd" id="15_a3se8"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_a3se8"]
@@ -156,6 +157,14 @@ offset_right = 521.0
 offset_bottom = -657.0
 metadata/_edit_use_anchors_ = true
 
+[node name="Button" type="Button" parent="bedroom" unique_id=1090697819]
+offset_left = -429.5498
+offset_top = -315.00256
+offset_right = -121.0
+offset_bottom = -110.0
+text = "Сбросить сонный долг"
+script = ExtResource("15_45l4g")
+
 [node name="cellar" type="Node2D" parent="." unique_id=982849024 groups=["Screens"]]
 position = Vector2(1856, -43)
 
@@ -206,6 +215,7 @@ offset_bottom = -43.0
 
 [node name="detailedStatsWindow" type="Control" parent="detailsWindow" unique_id=634421286 node_paths=PackedStringArray("nightName", "graph", "nightInterruptions", "sleepDuration", "durationBeforeFallingAsleep", "sleepQuality", "sleepBalance")]
 layout_mode = 1
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -536.0
@@ -310,5 +320,6 @@ text = "удалить"
 [connection signal="pressed" from="bedroom/WakeUpButton" to="bedroom/WakeUpButton" method="_on_pressed"]
 [connection signal="pressed" from="bedroom/bedroomToCellar" to="mainCamera/screenController" method="toCellar"]
 [connection signal="pressed" from="bedroom/debug/debugToggle" to="bedroom/debug/debugToggle" method="_on_pressed"]
+[connection signal="pressed" from="bedroom/Button" to="bedroom/Button" method="_on_pressed"]
 [connection signal="pressed" from="cellar/ScrollContainer/PanelContainer/VBoxContainer2/cellarToBedroom" to="mainCamera/screenController" method="toBedroom"]
 [connection signal="pressed" from="detailsWindow/detailedStatsWindow/Panel/Button" to="detailsWindow/detailedStatsWindow" method="_on_delete_pressed"]

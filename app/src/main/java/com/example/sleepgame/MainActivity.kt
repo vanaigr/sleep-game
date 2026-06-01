@@ -337,6 +337,11 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
         val db = Database(context)
         db.deleteSleepPeriod(periodId)
     }
+    @UsedByGodot
+    fun resetSleepBalance() {
+        val db = Database(context)
+        db.resetSleepBalance()
+    }
 
     @UsedByGodot
     fun _debugGetCurrentTime(): String {

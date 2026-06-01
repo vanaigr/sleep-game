@@ -77,6 +77,7 @@ class Database {
              */
             if(db.version == 4) {
                 // Oops... should've been `sleep_periods` since they may actually be incomplete
+                // NOTE: sleep_balance_duration is debt, not balance
                 db.execSQL("""
                     create table complete_sleep_periods(
                         period_id integer primary key,
@@ -103,10 +104,16 @@ class Database {
                 updateAllSleepPeriods()
                 db.version = 7
             }
+            if(db.version == 7) {
+                db.execSQL("create table should_reset_sleep_balance(id integer primary key)")
+                db.execSQL("alter table complete_sleep_periods add column reset_sleep_balance integer not null default 0")
+                updateAllSleepPeriods()
+                db.version = 8
+            }
         }
     }
 
-    fun updateSavedSleepPeriod(periodId: Int) {
+    fun updateSavedSleepPeriod(periodId: Int, creatingLatest: Boolean) {
         val records = getAllRecordsForPeriod(periodId)
         records.sortWith { a, b -> a.recordedTime.compareTo(b.recordedTime) }
         val data = calculateSleepPeriodData(records)
@@ -119,8 +126,25 @@ class Database {
             else Duration.ZERO
         }
 
+        val existingResetSleepBalance = db.rawQuery("select reset_sleep_balance from complete_sleep_periods where period_id = ?", arrayOf("" + periodId)).use {
+            if(it.moveToNext()) it.getInt(0) != 0
+            else null
+        }
+        val resetSleepBalance = (fun(): Boolean {
+            if (existingResetSleepBalance != null) return existingResetSleepBalance
+            if (!creatingLatest) return false
+
+            val shouldResetLatest = db.rawQuery("select 1 from should_reset_sleep_balance", arrayOf()).use {
+                it.moveToNext()
+            }
+            if (!shouldResetLatest) return false
+
+            db.execSQL("delete from should_reset_sleep_balance")
+            return true
+        })()
+
         // NOTE: expects that a person records every day, even if they haven't slept
-        val sleepBalance = lastSleepBalance + data.totalSleepDuration - Duration.ofHours(8)
+        val sleepBalance = (Duration.ofHours(8) - data.totalSleepDuration) + (if(resetSleepBalance) Duration.ZERO else lastSleepBalance)
         db.insertWithOnConflict(
             "complete_sleep_periods",
             null,
@@ -133,6 +157,7 @@ class Database {
                 put("interruption_count", data.interruptionCount)
                 put("sleep_balance_duration", encodeDuration(sleepBalance))
                 put("deleted", 0)
+                put("reset_sleep_balance", if(resetSleepBalance) 1 else 0)
             },
             SQLiteDatabase.CONFLICT_REPLACE
         )
@@ -140,14 +165,17 @@ class Database {
 
     fun updateSavedSleepPeriodsAfter(periodId: Int) {
         val periodIds = db.rawQuery(
-            "select period_id from complete_sleep_periods where deleted = 0 and period_id > ? order by period_id",
+            "select period_id, reset_sleep_balance from complete_sleep_periods where deleted = 0 and period_id > ? order by period_id",
             arrayOf("" + periodId)
         ).use {
-            val result = mutableListOf<Int>()
-            while(it.moveToNext()) result.add(it.getInt(0))
+            val result = mutableListOf<Pair<Int, Boolean>>()
+            while(it.moveToNext()) result.add(Pair(it.getInt(0), it.getInt(1) != 0))
             result
         }
-        for(periodId in periodIds) updateSavedSleepPeriod(periodId)
+        for((periodId, resetSleepBalance) in periodIds) {
+            if(resetSleepBalance) break
+            updateSavedSleepPeriod(periodId, false)
+        }
     }
 
     fun updateAllSleepPeriods() {
@@ -156,7 +184,7 @@ class Database {
             while(it.moveToNext()) result.add(it.getInt(0))
             result
         }
-        for(periodId in periodIds) updateSavedSleepPeriod(periodId)
+        for(periodId in periodIds) updateSavedSleepPeriod(periodId, false)
     }
 
     fun getSleepDataVersion(): Long {
@@ -168,6 +196,15 @@ class Database {
 
     fun bumpSleepDataVersion() {
         db.execSQL("update sleep_data_version set version = version + 1")
+    }
+
+    fun resetSleepBalance() {
+        db.insertWithOnConflict(
+            "should_reset_sleep_balance",
+            null,
+            ContentValues().apply { put("id", 1) },
+            SQLiteDatabase.CONFLICT_IGNORE
+        )
     }
 
     data class SleepRecordInput(
@@ -192,8 +229,7 @@ class Database {
                     arrayOf(id, "period_begin", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
                 )
                 bumpSleepDataVersion()
-                updateSavedSleepPeriod(id)
-                updateSavedSleepPeriodsAfter(id)
+                updateSavedSleepPeriod(id, true)
 
                 true
             }
@@ -218,7 +254,7 @@ class Database {
                     "insert into sleep_records(period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes) values(?, ?, ?, ?, ?)",
                     arrayOf(curPeriod.id, "period_end", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
                 )
-                updateSavedSleepPeriod(curPeriod.id)
+                updateSavedSleepPeriod(curPeriod.id, false)
                 updateSavedSleepPeriodsAfter(curPeriod.id)
                 bumpSleepDataVersion()
 
@@ -246,7 +282,7 @@ class Database {
                 "insert into sleep_records(period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes) values(?, ?, ?, ?, ?)",
                 arrayOf(curPeriod.id, "wake_up", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
             )
-            updateSavedSleepPeriod(curPeriod.id)
+            updateSavedSleepPeriod(curPeriod.id, false)
             updateSavedSleepPeriodsAfter(curPeriod.id)
             bumpSleepDataVersion()
         }
@@ -268,7 +304,7 @@ class Database {
                 "insert into sleep_records(period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes) values(?, ?, ?, ?, ?)",
                 arrayOf(curPeriod.id, "interruption", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
             )
-            updateSavedSleepPeriod(curPeriod.id)
+            updateSavedSleepPeriod(curPeriod.id, false)
             updateSavedSleepPeriodsAfter(curPeriod.id)
             bumpSleepDataVersion()
         }
@@ -290,7 +326,7 @@ class Database {
                 "insert into sleep_records(period_id, type, recorded_time, time_to_fall_asleep_minutes, minimum_sleep_duration_minutes) values(?, ?, ?, ?, ?)",
                 arrayOf(curPeriod.id, "fall_asleep", time, input.timeToFallAsleepMinutes, input.minimumSleepDurationMinutes)
             )
-            updateSavedSleepPeriod(curPeriod.id)
+            updateSavedSleepPeriod(curPeriod.id, true)
             updateSavedSleepPeriodsAfter(curPeriod.id)
             bumpSleepDataVersion()
         }
