@@ -3,6 +3,7 @@ package com.example.sleepgame
 import android.util.Log
 import java.time.Duration
 import java.time.Instant
+import kotlin.math.max
 
 data class SavedSleepPeriodData(
     val periodId: Int,
@@ -24,7 +25,7 @@ data class CalculatedSleepPeriodData(
     val nonSleepRanges: List<NonSleepRange>,
 )
 
-data class NonSleepRange(var begin: Instant, var end: Instant)
+data class NonSleepRange(var begin: Instant, var lastBegin: Instant, var end: Instant)
 
 fun calculateSleepPeriodData(records: Iterable<SleepRecord>): CalculatedSleepPeriodData {
     val nonSleepRanges = mutableListOf<NonSleepRange>()
@@ -32,20 +33,21 @@ fun calculateSleepPeriodData(records: Iterable<SleepRecord>): CalculatedSleepPer
 
     var initialFallAsleepPhase = true // Only "period_begin" or "fall_asleep" were seen before
 
-    val accumulateSleepUntil = fun(until: Instant, timeToFallAsleep: Duration, minimumSleepDuration: Duration) {
+    val addNonSleepPeriod = fun(begin: Instant, end: Instant, minimumSleepDuration: Duration) {
         if(nonSleepRanges.isEmpty()) {
-            nonSleepRanges.add(NonSleepRange(until, until + timeToFallAsleep))
+            nonSleepRanges.add(NonSleepRange(begin, begin, end))
             return
         }
 
-        val lastPeriod = nonSleepRanges.last()
-        val sleepTime = Duration.between(lastPeriod.end, until)
+        val lastRange = nonSleepRanges.last()
+        val sleepTime = Duration.between(lastRange.end, begin)
         if(sleepTime >= minimumSleepDuration) {
             totalSleepDuration += sleepTime
-            nonSleepRanges.add(NonSleepRange(until, until + timeToFallAsleep))
+            nonSleepRanges.add(NonSleepRange(begin, begin, end))
         }
         else {
-            lastPeriod.end = until
+            lastRange.lastBegin = begin
+            lastRange.end = end
         }
     }
 
@@ -55,25 +57,39 @@ fun calculateSleepPeriodData(records: Iterable<SleepRecord>): CalculatedSleepPer
                 val time = record.recordedTime.toInstant()
                 if(initialFallAsleepPhase) {
                     if(nonSleepRanges.isEmpty()) {
-                        nonSleepRanges.add(NonSleepRange(time, time + record.timeToFallAsleep))
+                        nonSleepRanges.add(NonSleepRange(time, time, time + record.timeToFallAsleep))
                     }
                     else {
-                        nonSleepRanges.last().end = time
+                        val lastRange = nonSleepRanges.last()
+                        lastRange.lastBegin = time
+                        lastRange.end = time
                     }
                 }
                 else {
-                    accumulateSleepUntil(time, record.timeToFallAsleep, record.minimumSleepDuration)
+                    addNonSleepPeriod(time, time + record.timeToFallAsleep, record.minimumSleepDuration)
                 }
             }
             "interruption" -> {
                 initialFallAsleepPhase = false
                 val time = record.recordedTime.toInstant()
-                accumulateSleepUntil(time, record.timeToFallAsleep, record.minimumSleepDuration)
+                addNonSleepPeriod(time, time + record.timeToFallAsleep, record.minimumSleepDuration)
             }
             "wake_up", "period_end" -> {
                 initialFallAsleepPhase = false
                 val time = record.recordedTime.toInstant()
-                accumulateSleepUntil(time, record.timeToFallAsleep, record.minimumSleepDuration)
+                addNonSleepPeriod(time, time, record.minimumSleepDuration)
+
+                if(nonSleepRanges.size >= 2) {
+                    return CalculatedSleepPeriodData(
+                        nonSleepRanges[0].end,
+                        nonSleepRanges.last().begin,
+                        totalSleepDuration,
+                        Duration.between(nonSleepRanges[0].begin, nonSleepRanges[0].end),
+                        nonSleepRanges.size - 2,
+                        nonSleepRanges,
+                    )
+                }
+
                 break
             }
             else -> {
@@ -82,21 +98,12 @@ fun calculateSleepPeriodData(records: Iterable<SleepRecord>): CalculatedSleepPer
         }
     }
 
-    if(nonSleepRanges.size < 2) {
-        return CalculatedSleepPeriodData(
-            null, null,
-            Duration.ZERO, Duration.ZERO,
-            0,
-            listOf()
-        )
-    }
-
     return CalculatedSleepPeriodData(
-        nonSleepRanges[0].end,
-        nonSleepRanges.last().begin,
+        null,
+        null,
         totalSleepDuration,
-        Duration.between(nonSleepRanges[0].begin, nonSleepRanges[0].end),
-        nonSleepRanges.size - 2,
+        if(nonSleepRanges.isEmpty()) Duration.ZERO else Duration.between(nonSleepRanges[0].begin, nonSleepRanges[0].end),
+        max(0, nonSleepRanges.size - 2),
         nonSleepRanges,
     )
 }

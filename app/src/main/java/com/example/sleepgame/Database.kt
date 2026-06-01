@@ -102,6 +102,11 @@ class Database {
                 db.execSQL("alter table complete_sleep_periods add column deleted integer not null default 0")
                 db.version = 6
             }
+            if(db.version == 6) {
+                db.execSQL("update sleep_records set minimum_sleep_duration_minutes = 15")
+                db.execSQL("update sleep_records set time_to_fall_asleep_minutes = 10 where \"type\" = 'interruption'")
+                db.version = 7
+            }
         }
     }
 
