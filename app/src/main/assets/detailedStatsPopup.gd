@@ -1,4 +1,4 @@
-extends Control
+extends Node
 class_name DetailedStatsWindow
 
 var bridgePlugin := Engine.get_singleton("BridgePlugin")
@@ -29,24 +29,25 @@ func open_with_data(data: Dictionary) -> void:
 func _on_button_pressed() -> void:
 	close()
 
+func _on_delete_pressed() -> void:
+	if currentPeriodId != null:
+		bridgePlugin.deleteSleepPeriod(currentPeriodId)
+		close()
+
 func open():
-	ScreenStack.push(self, close)
-	set_process_recursive(self, true)
-	show()
+	var root = get_parent()
+	ScreenStack.push(root, close)
+	set_process_recursive(root, true)
+	root.show()
 
 func close() -> void:
-	ScreenStack.delete(self)
-	set_process_recursive(self, false)
-	hide()
+	var root = get_parent()
+	ScreenStack.delete(root)
+	set_process_recursive(root, false)
+	root.hide()
 	
 func set_process_recursive(node: Node, enabled: bool) -> void:
 	node.set_process(enabled)
 
 	for child in node.get_children():
 		set_process_recursive(child, enabled)
-
-
-func _on_delete_pressed() -> void:
-	if currentPeriodId != null:
-		bridgePlugin.deleteSleepPeriod(currentPeriodId)
-		close()

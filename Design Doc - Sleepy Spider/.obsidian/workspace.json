@@ -6,7 +6,6 @@
       {
         "id": "1810a0c41d4e5cb3",
         "type": "tabs",
-        "dimension": 66.10738255033557,
         "children": [
           {
             "id": "0c8d87c7e6c0eb7d",
@@ -14,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Оглавление.md",
+                "file": "Другое/В настройках.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Оглавление"
+              "title": "В настройках"
             }
           },
           {
@@ -34,23 +33,6 @@
               },
               "icon": "lucide-file",
               "title": "В настройках"
-            }
-          }
-        ]
-      },
-      {
-        "id": "25f02f30d28c04fe",
-        "type": "tabs",
-        "dimension": 33.89261744966443,
-        "children": [
-          {
-            "id": "533dd6e66ad35178",
-            "type": "leaf",
-            "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Граф"
             }
           }
         ]
@@ -76,7 +58,7 @@
                 "autoReveal": false
               },
               "icon": "lucide-folder-closed",
-              "title": "Файловый менеджер"
+              "title": "Files"
             }
           },
           {
@@ -206,19 +188,19 @@
   },
   "left-ribbon": {
     "hiddenItems": {
-      "switcher:Меню быстрого перехода": false,
-      "graph:Граф": false,
-      "canvas:Создать новый холст": false,
-      "daily-notes:Сегодняшняя заметка": false,
-      "templates:Вставить шаблон": false,
-      "command-palette:Открыть палитру команд": false,
-      "bases:Создать новую базу": false
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
     }
   },
   "active": "0c8d87c7e6c0eb7d",
   "lastOpenFiles": [
-    "Другое/В настройках.md",
     "Оглавление.md",
+    "Другое/В настройках.md",
     "Страницы/Экран блокировки.md",
     "Главные механики/Вход в приложение/Вопрос про качество сна.md",
     "Переменные.md",

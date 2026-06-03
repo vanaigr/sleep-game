@@ -33,6 +33,8 @@ import org.godotengine.godot.GodotHost
 import org.godotengine.godot.plugin.GodotPlugin
 import org.godotengine.godot.plugin.SignalInfo
 import org.godotengine.godot.plugin.UsedByGodot
+import org.json.JSONArray
+import org.json.JSONObject
 import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
@@ -341,6 +343,26 @@ class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
     fun resetSleepBalance() {
         val db = Database(context)
         db.resetSleepBalance()
+    }
+
+    @UsedByGodot
+    fun getSettings(): String {
+        val result = JSONObject()
+
+        result.put("timeToFallAsleep", 15)
+        result.put("timeToFallAsleepAfterInterruption", 10)
+        result.put("normalSleepDuration", 8)
+        result.put("sleepButtonsOrder", JSONArray(arrayOf(1, 2, 3)))
+        result.put("sleepButtonsSize", JSONArray(arrayOf(20, 60, 20)))
+        result.put("sleepNotificationPeriod", "")
+        result.put("showSleepNotification", true)
+        result.put("sleepNotificationSound", true)
+        result.put("sleepNotificationVibration", true)
+
+        return result.toString()
+    }
+    fun setSettings(newSettingsJson: String): Boolean {
+        return true
     }
 
     @UsedByGodot

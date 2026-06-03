@@ -7,11 +7,16 @@ var drawPanel: DrawPanel
 
 func _enter_tree() -> void:
 	print('Plugin loaded')
+	
 	drawPanel = DrawPanel.new()
 	drawPanel.plugin = self
 	
+	var drawLayer = CanvasLayer.new()
+	drawLayer.layer = 1025
+	drawLayer.add_child(drawPanel)
+	
 	viewport = get_editor_interface().get_editor_viewport_2d() #get_editor_interface().get_editor_main_screen().get_child(0).get_child(1).get_child(0).get_child(0).get_child(0)
-	viewport.add_child(drawPanel)
+	viewport.add_child(drawLayer)
 	
 	update_overlays()
 
@@ -33,7 +38,7 @@ class DrawPanel extends Node2D:
 		queue_redraw()
 	
 	func _draw():
-		var size = get_parent().size
+		var size = get_parent().get_parent().size
 		
 		var scene_root := plugin.get_editor_interface().get_edited_scene_root()
 		if scene_root == null:

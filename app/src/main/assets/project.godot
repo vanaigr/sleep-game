@@ -29,8 +29,8 @@ gdscript/warnings/directory_rules={
 
 [display]
 
-window/size/viewport_width=1080
-window/size/viewport_height=1080
+window/size/viewport_width=387
+window/size/viewport_height=688
 window/size/mode=3
 window/subwindows/embed_subwindows=false
 window/stretch/mode="canvas_items"
