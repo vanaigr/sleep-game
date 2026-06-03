@@ -1,7 +1,7 @@
 @tool
 extends Node
 
-const safeSize = Vector2(1080, 1920)
+const safeSize = Vector2(387, 688)
 const minAspect = 9.0 / 21.0
 const maxAspect = 3.0 / 4.0
 
