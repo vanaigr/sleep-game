@@ -1,61 +1,116 @@
 package com.example.sleepgame
 
 import android.Manifest
-import android.annotation.SuppressLint
-import android.app.Dialog
+import android.R.attr.font
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.DialogInterface
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.database.Cursor
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import android.view.View
-import android.widget.RemoteViews
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsEndWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.core.database.getIntOrNull
-import androidx.fragment.app.DialogFragment
-import com.example.sleepgame.MainActivity.Companion.CHANNEL_ID
-import com.example.sleepgame.MainActivity.Companion.sleepControlsNotificationId
-import org.godotengine.godot.Dictionary
-import org.godotengine.godot.Godot
-import org.godotengine.godot.GodotFragment
-import org.godotengine.godot.GodotHost
-import org.godotengine.godot.plugin.GodotPlugin
-import org.godotengine.godot.plugin.SignalInfo
-import org.godotengine.godot.plugin.UsedByGodot
-import org.json.JSONArray
-import org.json.JSONObject
+import java.lang.Math.clamp
+import java.time.ZonedDateTime
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.DisallowComposableCalls
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.composed
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.changedToDown
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.lerp
+import androidx.viewpager.widget.ViewPager
+import androidx.viewpager2.widget.ViewPager2
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
 import java.time.Duration
 import java.time.Instant
-import java.time.ZonedDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalUnit
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.floor
+import kotlin.math.max
+import kotlin.math.min
 
-class MainActivity: AppCompatActivity(), GodotHost {
-    private lateinit var godotFragment: GodotFragment
-    private var bridgePlugin: BridgePlugin? = null
-
+class MainActivity: ComponentActivity() {
     var overrideTime: ZonedDateTime? = null
 
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == Intent.ACTION_SCREEN_OFF
                 || intent.action == Intent.ACTION_USER_PRESENT) {
-                sleepControlsUpdate(context)
+                /////sleepControlsUpdate(context)
             }
         }
     }
@@ -71,33 +126,16 @@ class MainActivity: AppCompatActivity(), GodotHost {
             addAction(Intent.ACTION_USER_PRESENT)
         })
 
-        val currentGodotFragment = supportFragmentManager.findFragmentById(R.id.godot_fragment_container)
-        if (currentGodotFragment is GodotFragment) {
-            godotFragment = currentGodotFragment
-        } else {
-            godotFragment = GodotFragment()
-            supportFragmentManager.beginTransaction()
-                .replace(R.id.godot_fragment_container, godotFragment)
-                .commitNowAllowingStateLoss()
-        }
+        /////MainActivityTracker.attach(this)
 
-        // Cool engine. It exits, but doesn't think it's necessary to notify anyone
-        // So pressing back button just turns it into a glorified ImageView.
-        @Suppress("UNCHECKED_CAST")
-        (
-            godotFragment.godot::class.java.getDeclaredField("runOnTerminate")
-                .apply { isAccessible = true }
-                .get(godotFragment.godot) as java.util.concurrent.atomic.AtomicReference<Runnable>
-        ).set {
-            finish()
+        setContent {
+            Main()
         }
-
-        MainActivityTracker.attach(this)
     }
 
     override fun onResume() {
         super.onResume()
-        sleepControlsUpdate(this)
+        /////sleepControlsUpdate(this)
     }
 
     override fun onDestroy() {
@@ -107,16 +145,7 @@ class MainActivity: AppCompatActivity(), GodotHost {
 
     override fun onPause() {
         super.onPause()
-        sleepControlsUpdate(this)
-    }
-
-    override fun getActivity() = this
-    override fun getGodot() = godotFragment.godot
-    override fun getHostPlugins(godot: Godot): Set<GodotPlugin> {
-        if (bridgePlugin == null) {
-            bridgePlugin = BridgePlugin(godot)
-        }
-        return setOf(bridgePlugin!!)
+        /////sleepControlsUpdate(this)
     }
 
     private fun createSleepControlsChannel(context: Context) {
@@ -152,6 +181,614 @@ class MainActivity: AppCompatActivity(), GodotHost {
     }
 }
 
+
+val safeSize = Vector2(1080.0f, 2160.0f)
+val maxSize = Vector2(1620.0f, 2520.0f)
+val minAspect = 9.0f / 21.0f
+val maxAspect = 3.0f / 4.0f
+
+@Composable
+inline fun Screen(
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit
+) {
+    val configuration = LocalConfiguration.current
+
+    val screenWidth = configuration.screenWidthDp.dp
+    val screenHeight = configuration.screenHeightDp.dp
+
+    Box(modifier.size(screenWidth, screenHeight).clip(RectangleShape), content = content)
+}
+
+@Composable
+fun BoxScope.ScreenPositioning(
+    content: @Composable () -> Unit
+) {
+    val configuration = LocalConfiguration.current
+
+    val screenWidth = configuration.screenWidthDp.toFloat()
+    val screenHeight = configuration.screenHeightDp.toFloat()
+
+    val aspect = clamp(screenWidth / screenHeight, minAspect, maxAspect)
+    val safeAspect = safeSize.x / safeSize.y
+
+    val size = if(aspect < safeAspect) Vector2(screenWidth, screenWidth / safeAspect)
+    else Vector2(screenHeight * safeAspect, screenHeight)
+
+    FreeLayout(
+        safeSize,
+        Modifier.size(size.x.dp, size.y.dp)
+            .align(Alignment.Center),
+        content = content
+    )
+}
+
+@Composable
+fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
+    Screen(
+        Modifier
+            .offset(y = (animatable * LocalConfiguration.current.screenHeightDp.dp.value).dp)
+    ) {
+        ScreenPositioning {
+            val bg = painterResource(R.drawable.background_main_screen)
+            Image(
+                bg,
+                contentDescription = null,
+                Modifier
+                    .freePosition(
+                        0.0f,
+                        -(maxSize.y - safeSize.y) * 0.5f,
+                        null,
+                        maxSize.y,
+                    )
+            )
+
+            val bed = painterResource(R.drawable.bed)
+            Image(
+                bed,
+                contentDescription = null,
+                Modifier
+                    .freePosition(10.0f, safeSize.y * 0.72f, safeSize.x * 0.6f, null)
+                    .aspectRatio(bed.intrinsicSize.width / bed.intrinsicSize.height)
+            )
+
+            val spider = painterResource(R.drawable.spider)
+            Image(
+                spider,
+                contentDescription = null,
+                Modifier
+                    .freePosition(
+                        safeSize.x * 0.7f,
+                        safeSize.y * 0.72f,
+                        safeSize.x * 0.3f,
+                        null
+                    )
+                    .aspectRatio(spider.intrinsicSize.width / spider.intrinsicSize.height)
+            )
+
+            val alarm = painterResource(R.drawable.alarm)
+            Image(
+                alarm,
+                contentDescription = null,
+                Modifier
+                    .freePosition(safeSize.x * 0.7f, safeSize.y * 0.6f, safeSize.x * 0.3f, null)
+                    .aspectRatio(alarm.intrinsicSize.width / alarm.intrinsicSize.height)
+            )
+
+            val board = painterResource(R.drawable.board)
+            Image(
+                board,
+                contentDescription = null,
+                Modifier
+                    .freePosition(safeSize.x * 0.5f, safeSize.y * 0.3f, safeSize.x * 0.4f, null)
+                    .aspectRatio(board.intrinsicSize.width / board.intrinsicSize.height)
+            )
+        }
+
+        Column(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxWidth()) {
+                Button({ }, Modifier.fillMaxWidth()) {
+                    Text("Подмена времени отключена")
+                }
+                Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                    val overrideDate = remember { mutableStateOf(TextFieldValue("")) }
+
+                    TextField(
+                        value = overrideDate.value,
+                        onValueChange = { it: TextFieldValue -> overrideDate.value = it },
+                        Modifier.weight(1.0f)
+                    )
+
+                    Image(
+                        Icons.Default.Check,
+                        contentDescription = null,
+                        Modifier.fillMaxHeight().aspectRatio(1.0f)
+                    )
+                }
+            }
+
+            Column(Modifier.weight(1.0f)) {}
+
+            Column(Modifier.fillMaxWidth()) {
+                Button({ toCellar() }, Modifier.fillMaxWidth()) {
+                    Text("В подвал")
+                }
+            }
+        }
+    }
+}
+
+@Preview
+@Composable
+fun Preview() {
+    val records = listOf<SleepRecord>(
+        SleepRecord(
+            0,
+            "period_begin",
+            ZonedDateTime.parse("2026-01-01T05:18:01-05:00"),
+            Duration.ofMinutes(15),
+            Duration.ofMinutes(10),
+        ),
+        SleepRecord(
+            0,
+            "period_end",
+            ZonedDateTime.parse("2026-01-02T05:06:01-05:00"),
+            Duration.ofMinutes(15),
+            Duration.ofMinutes(10),
+        ),
+    )
+
+    val info0 = calculateSleepPeriodData(records)
+    val info = SavedSleepPeriodData(
+        0,
+        1,
+        info0.fallAsleep,
+        info0.wakeUp,
+        info0.totalSleepDuration,
+        info0.durationBeforeFallingAsleep,
+        info0.interruptionCount,
+        Duration.ofHours(8) - info0.totalSleepDuration,
+    )
+
+
+    /*
+    Column(Modifier.width(300.dp).height(50.dp).background(Color.Gray)) {
+        CellarSleepPeriodListItem(
+            Modifier.fillMaxSize(),
+            info,
+            ZoneId.of("America/Chicago"),
+            true,
+            {}
+        )
+    }
+     */
+
+    SleepPeriodDetailsScreenDisplay(info, records)
+}
+
+@Composable
+fun CellarSleepPeriodListItem(
+    modifier: Modifier = Modifier,
+    info: SavedSleepPeriodData, timezone: ZoneId,
+    topGap: Boolean,
+    openDetails: (info: SavedSleepPeriodData) -> Unit,
+) {
+    val locale = LocalConfiguration.current.locales[0]
+
+    Column(modifier) {
+        if(topGap) {
+            Row(Modifier.fillMaxWidth().height(1.dp).background(Color.Black)) {
+            }
+        }
+
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier
+                    .weight(1.0f)
+                    .padding(start = 10.dp, end = 10.dp, top = 5.dp, bottom = 5.dp)
+                    .clickable { openDetails(info) }
+            ) {
+                val dateText = info.wakeUp?.atZone(timezone)?.toLocalDate()?.format(
+                    DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(locale)
+                )
+
+                val qualityText = when (info.quality) {
+                    1 -> "Не спал"
+                    2 -> "Ужасно"
+                    3 -> "Не очень"
+                    4 -> "Не идеально"
+                    5 -> "Замечательно"
+                    else -> "Не записано"
+                }
+                val sleepDurationText = durationToHHMM(info.sleepBalance)
+
+                Text(dateText ?: "Unknown", Modifier.weight(1.0f).padding(end = 5.dp))
+                Text(qualityText, Modifier.padding(end = 5.dp))
+                Text(sleepDurationText)
+            }
+        }
+    }
+    /*
+    fun makeSleepPeriodDataDict(info: SavedSleepPeriodData): Dictionary {
+        val currentTimezone = getCurrentTime().zone
+
+        val result = Dictionary()
+        result["period_id"] = info.periodId
+        result["duration"] = durationSecToString(info.totalSleepDuration.seconds)
+        result["quality"] = when(info.quality) {
+            1 -> "Не спал"
+            2 -> "Ужасно"
+            3 -> "Не очень"
+            4 -> "Не идеально"
+            5 -> "Замечательно"
+            else -> "Не записано"
+        }
+        result["begin_time"] = info.fallAsleep?.atZone(currentTimezone)?.toLocalTime()?.truncatedTo(ChronoUnit.SECONDS).toString()
+        result["end_time"] = info.wakeUp?.atZone(currentTimezone)?.toLocalTime()?.truncatedTo(ChronoUnit.SECONDS).toString()
+        result["date"] = info.wakeUp?.atZone(currentTimezone)?.toLocalDate()?.format(
+            DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(Locale.getDefault())
+        )
+        result["interruption_count"] = info.interruptionCount
+        result["duration_before_falling_asleep"] = durationSecToString(info.durationBeforeFallingAsleep.seconds)
+        result["sleep_balance"] = durationSecToString(info.sleepBalance.seconds)
+
+        return result
+    }
+     */
+}
+
+fun durationToHHMM(duration: Duration): String {
+    var totalMinutes = (duration + Duration.ofSeconds(30)).toMinutes()
+
+    val sign = if(totalMinutes < 0) "-" else ""
+    totalMinutes = abs(totalMinutes)
+
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes - hours * 60
+
+    return sign + hours + ":" + minutes.toString().padStart(2, '0')
+}
+
+@Composable
+fun SleepPeriodDetailsScreen(info: SavedSleepPeriodData) {
+    val context = LocalContext.current
+
+    val records = remember {
+        val db = Database(context)
+
+        val records = db.getAllRecordsForPeriod(info.periodId)
+        records.sortWith { a, b -> a.recordedTime.compareTo(b.recordedTime) }
+
+        records
+    }
+
+    SleepPeriodDetailsScreenDisplay(info, records)
+}
+
+@Composable
+fun SleepPeriodDetailsScreenDisplay(info: SavedSleepPeriodData, records: List<SleepRecord>) {
+    val TAG = "SleepPeriodDetailsScreenDisplay"
+
+    val context = LocalContext.current
+    val currentTimezone = remember { getCurrentTime().zone }
+
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+
+    Screen(Modifier.background(Color.DarkGray)) {
+        Column(Modifier.padding(10.dp)) {
+            Text("Ночь на " +
+                    info.wakeUp?.atZone(currentTimezone)?.toLocalDate()?.format(
+                        DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(Locale.getDefault())
+                    )
+            )
+            Column(Modifier.height(10.dp)) {}
+
+            Canvas(Modifier.fillMaxWidth().height(150.dp)) {
+                val width = size.width
+                val height = size.height
+
+                if(records.isEmpty()) {
+                    Log.d(TAG, "No records for the given period")
+                    return@Canvas
+                }
+
+                val tickFontSize = 12.sp
+                val tickFontSizePx = with(density) { tickFontSize.toPx() }
+                val numbers = Array(24) { i ->
+                    textMeasurer.measure("${1 + i}", style = TextStyle(fontSize = tickFontSize))
+                }
+                val tickWidth = numbers.maxBy { it.size.width }.size.width
+
+                val padding = with(density) { 4.dp.toPx() }
+                val maxTicks = floor(width / (tickWidth + padding)).toInt()
+
+                val currentTimezone = getCurrentTime().zone
+                val begin = records[0].recordedTime.withZoneSameInstant(currentTimezone)
+                val end = records.last().recordedTime.withZoneSameInstant(currentTimezone)
+
+                var roundingHours = 1
+                var roundedBegin: ZonedDateTime
+                var roundedEnd: ZonedDateTime
+                var tickCount: Long
+                while(true) {
+                    roundedBegin = roundByHours(begin, roundingHours, false)
+                    val difference = Duration.between(roundedBegin, end)
+                    var totalHours = difference.toHours()
+                    if(difference != Duration.ofHours(totalHours)) totalHours++
+                    tickCount = Math.ceilDiv(totalHours, roundingHours) + 1
+
+                    if(tickCount <= maxTicks) break
+                    if(roundingHours >= 24) break
+                    roundingHours *= 2
+                }
+                roundedEnd = roundedBegin + Duration.ofHours((tickCount - 1) * roundingHours)
+                val totalSeconds = Duration.between(roundedBegin, roundedEnd).seconds.toDouble()
+                val roundedBeginInstant = roundedBegin.toInstant()
+
+                val graphData = calculateSleepPeriodData(records)
+
+                val sleepTimeY = height - padding * 0.5f
+                val tickY = sleepTimeY - tickFontSizePx - padding * 0.5f
+                val graphBottom = tickY - tickFontSizePx - padding * 0.5f
+
+                val lineWidth = with(density) { 2.dp.toPx() }
+
+                drawLine(
+                    SolidColor(Color.Gray),
+                    Offset((padding + tickWidth) * 0.5f, graphBottom + lineWidth * 0.5f),
+                    Offset(width - (padding + tickWidth) * 0.5f, graphBottom + lineWidth * 0.5f),
+                    lineWidth
+                )
+
+                val timeToX = fun(time: Instant): Double {
+                    val factor = Duration.between(roundedBeginInstant, time).seconds.toDouble() / totalSeconds
+                    return (padding + tickWidth) * 0.5 + factor * (width - padding - tickWidth)
+                }
+
+                for (tickI in 0 until tickCount) {
+                    val time = roundedBegin + Duration.ofHours(tickI * roundingHours)
+                    val position = timeToX(time.toInstant()).toFloat()
+
+                    drawLine(
+                        SolidColor(Color.Gray),
+                        Offset(position, padding * 0.5f),
+                        Offset(position, graphBottom + lineWidth),
+                        lineWidth
+                    )
+
+                    // TODO: this should be drawn in a separate pass to prevent overlap
+                    // but I don't think there can be overlap so doesn't matter?
+                    val textMeasure = numbers[-1 + time.toLocalTime().hour]
+                    drawText(
+                        textMeasure,
+                        Color.White,
+                        Offset(position - textMeasure.size.width * 0.5f, tickY - tickFontSizePx),
+                    )
+                }
+
+                for(rangeI in 1 until (graphData.nonSleepRanges.size - 1)) {
+                    val range = graphData.nonSleepRanges[rangeI]
+
+                    val beginX = timeToX(range.begin).toFloat()
+                    val lastBeginX = timeToX(range.lastBegin).toFloat()
+                    val endX = timeToX(range.end).toFloat()
+
+                    val points = mutableListOf<Array<Float>>()
+                    points.add(arrayOf(beginX, 0.0f))
+                    points.add(arrayOf(beginX, 1.0f))
+                    points.add(arrayOf(lastBeginX, 1.0f))
+                    points.add(arrayOf(endX, 0.0f))
+
+                    var i = 0
+                    while (i != points.size) {
+                        val prev = if (i == 0) points.last() else points[i - 1]
+                        val cur = points[i]
+                        if (abs(prev[0] - cur[0]) < 1 && abs(prev[1] - cur[1]) < 0.001) {
+                            points.removeAt(i)
+                        } else {
+                            i++
+                        }
+                    }
+
+                    if (points.size < 3) continue
+
+                    val path = Path().apply {
+                        for ((i, point) in points.withIndex()) {
+                            val y = lerp(graphBottom, padding * 0.5f, point[1])
+                            if(i == 0) {
+                                moveTo(point[0], y)
+                            }
+                            else {
+                                lineTo(point[0], y)
+                            }
+                        }
+                    }
+
+                    drawPath(path, SolidColor(Color(255, 140, 0)))
+                }
+
+                if(graphData.fallAsleep != null) {
+                    val x = timeToX(graphData.fallAsleep).toFloat()
+
+                    drawLine(
+                        SolidColor(Color.Blue),
+                        Offset(x, padding * 0.5f),
+                        Offset(x, graphBottom),
+                        lineWidth
+                    )
+
+                    val text = graphData.fallAsleep.atZone(currentTimezone).toLocalTime()
+                        .truncatedTo(ChronoUnit.MINUTES).toString()
+
+                    val textMeasure = textMeasurer.measure(text, TextStyle(fontSize = tickFontSize))
+                    drawText(
+                        textMeasure,
+                        Color.Blue,
+                        Offset(
+                            max(padding * 0.5f, x - textMeasure.size.width * 0.5f),
+                            sleepTimeY - tickFontSizePx,
+                        ),
+                    )
+                }
+                if(graphData.wakeUp != null) {
+                    val x = timeToX(graphData.wakeUp).toFloat()
+
+                    drawLine(
+                        SolidColor(Color.Red),
+                        Offset(x, padding * 0.5f),
+                        Offset(x, graphBottom),
+                        lineWidth
+                    )
+
+                    val text = graphData.wakeUp.atZone(currentTimezone).toLocalTime()
+                        .truncatedTo(ChronoUnit.MINUTES).toString()
+
+                    val textMeasure = textMeasurer.measure(text, TextStyle(fontSize = tickFontSize))
+                    drawText(
+                        textMeasure,
+                        Color.Red,
+                        Offset(
+                            min(width - padding * 0.5f, x + textMeasure.size.width * 0.5f) - textMeasure.size.width,
+                            sleepTimeY - tickFontSizePx,
+                        ),
+                    )
+                }
+            }
+
+            Text("Кол-во ночных пробуждений: " + info.interruptionCount)
+            Text("Время сна: " + durationToHHMM(info.totalSleepDuration))
+            Text("Время лежания в кровати: " + durationToHHMM(info.durationBeforeFallingAsleep))
+            Text("Соннай долг: " + durationToHHMM(info.sleepBalance))
+
+            Row(Modifier.weight(1f)) {}
+
+            Button({ Database(context).deleteSleepPeriod(info.periodId) }, Modifier.fillMaxWidth()) {
+                Text("Удалить")
+            }
+        }
+    }
+}
+
+@Composable
+fun CellarScreen(animatable: Float, toBedroom: () -> Unit) {
+    val context = LocalContext.current
+    val sleepPeriods = remember { Database(context).getAllSleepPeriodData() }
+    val currentTimezone = getCurrentTime().zone
+
+    val detailsToShowS = remember { mutableStateOf<SavedSleepPeriodData?>(null) }
+    val detailsToShow = detailsToShowS.value
+
+    if(detailsToShow != null) {
+        BackHandler {
+            detailsToShowS.value = null
+        }
+        SleepPeriodDetailsScreen(detailsToShow)
+        return
+    }
+
+    Screen(
+        Modifier
+            .offset(y = (animatable * LocalConfiguration.current.screenHeightDp.dp.value).dp)
+            .background(Color.Gray)
+    ) {
+        Column {
+            Button({ toBedroom() }, Modifier.fillMaxWidth()) {
+                Text("В спалню")
+            }
+            LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+                items(sleepPeriods.size) { index ->
+                    CellarSleepPeriodListItem(
+                        Modifier,
+                        sleepPeriods[index],
+                        currentTimezone,
+                        index != 0,
+                        { info -> detailsToShowS.value = info }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun Main() {
+    val scope = rememberCoroutineScope()
+
+    val bedroomAnimatableS = remember { mutableStateOf<Animatable<Float, AnimationVector1D>?>(Animatable(0.0f)) }
+    val cellarAnimatableS = remember { mutableStateOf<Animatable<Float, AnimationVector1D>?>(null) }
+
+    val bedroomAnimatable = bedroomAnimatableS.value
+    val cellarAnimatable = cellarAnimatableS.value
+
+    if(bedroomAnimatable != null) {
+        BedroomScreen(
+            bedroomAnimatable.value,
+            toCellar = {
+                scope.launch {
+                    val ba = Animatable(0.0f)
+                    val ca = Animatable(1.0f)
+                    bedroomAnimatableS.value = ba
+                    cellarAnimatableS.value = ca
+
+                    coroutineScope {
+                        launch {
+                            ba.animateTo(-1.0f, tween(500))
+                        }
+                        launch {
+                            ca.animateTo(0.0f, tween(500))
+                        }
+                    }
+
+                    bedroomAnimatableS.value = null
+                }
+            }
+        )
+    }
+
+    if(cellarAnimatable != null) {
+        CellarScreen(
+            cellarAnimatable.value,
+            toBedroom = {
+                scope.launch {
+                    val ba = Animatable(-1.0f)
+                    val ca = Animatable(0.0f)
+                    bedroomAnimatableS.value = ba
+                    cellarAnimatableS.value = ca
+
+                    coroutineScope {
+                        launch {
+                            ba.animateTo(0f, tween(500))
+                        }
+                        launch {
+                            ca.animateTo(1f, tween(500))
+                        }
+                    }
+
+                    cellarAnimatableS.value = null
+                }
+            }
+        )
+    }
+}
+
+fun getCurrentTime(): ZonedDateTime {
+    return ZonedDateTime.now()//MainActivityTracker.resumedActivity?.overrideTime ?: ZonedDateTime.now()
+}
+
+fun roundByHours(time: ZonedDateTime, roundByHours: Int, ceil: Boolean): ZonedDateTime {
+    val startOfDay = time.truncatedTo(ChronoUnit.DAYS)
+    val oldOffset = Duration.between(startOfDay, time)
+    val floorOffset = Duration.ofHours(oldOffset.toHours() / roundByHours * roundByHours)
+    val newOffset = run {
+        if(!ceil) floorOffset
+        else if(oldOffset == floorOffset) floorOffset
+        else floorOffset + Duration.ofHours(roundByHours.toLong())
+    }
+    return startOfDay.plus(newOffset)
+}
+
+/*
 fun makeSleepPeriodDataDict(info: SavedSleepPeriodData): Dictionary {
     val currentTimezone = getCurrentTime().zone
 
@@ -176,18 +813,6 @@ fun makeSleepPeriodDataDict(info: SavedSleepPeriodData): Dictionary {
     result["sleep_balance"] = durationSecToString(info.sleepBalance.seconds)
 
     return result
-}
-
-fun roundByHours(time: ZonedDateTime, roundByHours: Int, ceil: Boolean): ZonedDateTime {
-    val startOfDay = time.truncatedTo(ChronoUnit.DAYS)
-    val oldOffset = Duration.between(startOfDay, time)
-    val floorOffset = Duration.ofHours(oldOffset.toHours() / roundByHours * roundByHours)
-    val newOffset = run {
-        if(!ceil) floorOffset
-        else if(oldOffset == floorOffset) floorOffset
-        else floorOffset + Duration.ofHours(roundByHours.toLong())
-    }
-    return startOfDay.plus(newOffset)
 }
 
 class BridgePlugin(godot: Godot) : GodotPlugin(godot) {
@@ -571,3 +1196,4 @@ class SleepQualityDialogFragment(private val periodId: Int) : DialogFragment() {
 fun getCurrentTime(): ZonedDateTime {
     return MainActivityTracker.resumedActivity?.overrideTime ?: ZonedDateTime.now()
 }
+ */
