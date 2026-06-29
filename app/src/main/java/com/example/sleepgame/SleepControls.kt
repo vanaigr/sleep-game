@@ -3,25 +3,19 @@ package com.example.sleepgame
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.Dialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import android.os.Bundle
 import android.util.Log
-import android.view.View
 import android.widget.RemoteViews
-import androidx.core.app.ActivityCompat.requestPermissions
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import androidx.fragment.app.DialogFragment
 
 private val TAG = "Sleep Controls"
 
@@ -56,7 +50,7 @@ fun sleepQualityUpdate() {
     val db = Database(activity)
     val periodId = db.shouldShowQualityDialog() ?: return
 
-    activity.showQualityDialogFor.value = periodId
+    activity.showQualityDialogForS.value = periodId
 
     Log.d(TAG, "Showing")
 }

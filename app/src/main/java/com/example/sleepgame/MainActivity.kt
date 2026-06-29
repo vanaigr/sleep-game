@@ -1,21 +1,14 @@
 package com.example.sleepgame
 
-import android.Manifest
-import android.R.attr.font
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.tween
@@ -36,14 +29,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsEndWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -56,33 +46,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import java.lang.Math.clamp
 import java.time.ZonedDateTime
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.DisallowComposableCalls
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.composed
-import androidx.compose.ui.draw.paint
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.pointer.AwaitPointerEventScope
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerId
-import androidx.compose.ui.input.pointer.PointerType
-import androidx.compose.ui.input.pointer.changedToDown
-import androidx.compose.ui.input.pointer.changedToUp
-import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -91,31 +67,29 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import androidx.compose.ui.window.Dialog
-import androidx.viewpager.widget.ViewPager
-import androidx.viewpager2.widget.ViewPager2
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.datetime.TimeZone
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.time.temporal.ChronoUnit
-import java.time.temporal.TemporalUnit
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.toKotlinDuration
 
 object MainActivityTracker : ActivityTracker<MainActivity>()
 
 
 class MainActivity: ComponentActivity() {
-    var overrideTime: ZonedDateTime? = null
+    var overrideTimeS = mutableStateOf<ZonedDateTime?>(null)
 
-    val showQualityDialogFor = mutableStateOf<Int?>(null)
+    val showQualityDialogForS = mutableStateOf<Int?>(null)
 
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -140,7 +114,7 @@ class MainActivity: ComponentActivity() {
         MainActivityTracker.attach(this)
 
         setContent {
-            Main(showQualityDialogFor)
+            Main(showQualityDialogForS)
         }
     }
 
@@ -300,26 +274,7 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
         }
 
         Column(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxWidth()) {
-                Button({ }, Modifier.fillMaxWidth()) {
-                    Text("Подмена времени отключена")
-                }
-                Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-                    val overrideDate = remember { mutableStateOf(TextFieldValue("")) }
-
-                    TextField(
-                        value = overrideDate.value,
-                        onValueChange = { it: TextFieldValue -> overrideDate.value = it },
-                        Modifier.weight(1.0f)
-                    )
-
-                    Image(
-                        Icons.Default.Check,
-                        contentDescription = null,
-                        Modifier.fillMaxHeight().aspectRatio(1.0f)
-                    )
-                }
-            }
+            CurrentTimeDebug()
 
             Column(Modifier.weight(1.0f)) {}
 
@@ -328,6 +283,61 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
                     Text("В подвал")
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun CurrentTimeDebug() {
+    val activity = MainActivityTracker.resumedActivity!!
+
+    val overrideTime = activity.overrideTimeS.value
+
+    val timeTextS = remember { mutableStateOf(TextFieldValue("")) }
+    val overridingTimeS = remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            val now = ZonedDateTime.now()
+            if(!overridingTimeS.value) {
+                timeTextS.value = TextFieldValue(
+                    now.truncatedTo(ChronoUnit.SECONDS)
+                        .format(DateTimeFormatter.ISO_ZONED_DATE_TIME)
+                )
+            }
+            kotlinx.coroutines.delay(
+                (Duration.between(now, now.truncatedTo(ChronoUnit.SECONDS)) + Duration.ofSeconds(1)).toKotlinDuration()
+            )
+        }
+    }
+
+    val parsedTime = try { ZonedDateTime.parse(timeTextS.value.text) } catch(_: Exception) { null }
+    if(overridingTimeS.value && parsedTime != null) {
+        activity.overrideTimeS.value = parsedTime
+    }
+    else {
+        activity.overrideTimeS.value = null
+    }
+
+    Column(Modifier.fillMaxWidth()) {
+        Button({ overridingTimeS.value = !overridingTimeS.value }, Modifier.fillMaxWidth()) {
+            Text(if(overridingTimeS.value) "Подмена времени включена" else "Подмена времени отключена")
+        }
+        Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+
+            TextField(
+                value = timeTextS.value,
+                onValueChange = { it: TextFieldValue ->
+                    timeTextS.value = it
+                },
+                Modifier.weight(1.0f)
+            )
+
+            Image(
+                if(parsedTime != null) Icons.Default.Check else Icons.Default.Close,
+                contentDescription = null,
+                Modifier.fillMaxHeight().aspectRatio(1.0f)
+            )
         }
     }
 }
@@ -818,7 +828,7 @@ fun Main(showQualityDialogForS: MutableState<Int?>) {
 }
 
 fun getCurrentTime(): ZonedDateTime {
-    return ZonedDateTime.now()//MainActivityTracker.resumedActivity?.overrideTime ?: ZonedDateTime.now()
+    return MainActivityTracker.resumedActivity?.overrideTimeS?.value ?: ZonedDateTime.now()
 }
 
 fun roundByHours(time: ZonedDateTime, roundByHours: Int, ceil: Boolean): ZonedDateTime {
