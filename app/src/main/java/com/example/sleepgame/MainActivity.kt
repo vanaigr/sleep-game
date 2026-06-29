@@ -39,9 +39,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsEndWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -60,11 +62,14 @@ import java.time.ZonedDateTime
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisallowComposableCalls
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.paint
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
@@ -85,6 +90,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
+import androidx.compose.ui.window.Dialog
 import androidx.viewpager.widget.ViewPager
 import androidx.viewpager2.widget.ViewPager2
 import kotlinx.coroutines.coroutineScope
@@ -103,14 +109,19 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 
+object MainActivityTracker : ActivityTracker<MainActivity>()
+
+
 class MainActivity: ComponentActivity() {
     var overrideTime: ZonedDateTime? = null
+
+    val showQualityDialogFor = mutableStateOf<Int?>(null)
 
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == Intent.ACTION_SCREEN_OFF
                 || intent.action == Intent.ACTION_USER_PRESENT) {
-                /////sleepControlsUpdate(context)
+                sleepControlsUpdate(context)
             }
         }
     }
@@ -126,16 +137,16 @@ class MainActivity: ComponentActivity() {
             addAction(Intent.ACTION_USER_PRESENT)
         })
 
-        /////MainActivityTracker.attach(this)
+        MainActivityTracker.attach(this)
 
         setContent {
-            Main()
+            Main(showQualityDialogFor)
         }
     }
 
     override fun onResume() {
         super.onResume()
-        /////sleepControlsUpdate(this)
+        sleepControlsUpdate(this)
     }
 
     override fun onDestroy() {
@@ -145,39 +156,7 @@ class MainActivity: ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        /////sleepControlsUpdate(this)
-    }
-
-    private fun createSleepControlsChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
-            }
-        }
-
-        //if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Кнопки записи сна",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Кнопки записи сна"
-            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-            setShowBadge(true)
-        }
-        val manager = context.getSystemService(NotificationManager::class.java)
-        for (oldId in MainActivity.OLD_CHANNEL_IDS) manager.deleteNotificationChannel(oldId)
-        manager.createNotificationChannel(channel)
-        //}
-    }
-
-    companion object {
-        private val TAG = "Native"
-
-        val CHANNEL_ID = "sleep_channel_v2"
-        val OLD_CHANNEL_IDS = arrayOf("sleep_channel")
-        val sleepControlsNotificationId = 1001
+        sleepControlsUpdate(this)
     }
 }
 
@@ -186,6 +165,11 @@ val safeSize = Vector2(1080.0f, 2160.0f)
 val maxSize = Vector2(1620.0f, 2520.0f)
 val minAspect = 9.0f / 21.0f
 val maxAspect = 3.0f / 4.0f
+
+
+val defaultTimeToFallAsleepMinutes = 15L
+val defaultMinimumSleepDurationMinutes = 10L
+
 
 @Composable
 inline fun Screen(
@@ -225,6 +209,8 @@ fun BoxScope.ScreenPositioning(
 
 @Composable
 fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
+    val context = LocalContext.current
+
     Screen(
         Modifier
             .offset(y = (animatable * LocalConfiguration.current.screenHeightDp.dp.value).dp)
@@ -283,6 +269,34 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
                     .freePosition(safeSize.x * 0.5f, safeSize.y * 0.3f, safeSize.x * 0.4f, null)
                     .aspectRatio(board.intrinsicSize.width / board.intrinsicSize.height)
             )
+
+            // Click areas
+
+            Box(
+                Modifier
+                    .freePosition(0f, safeSize.y * 0.7f, safeSize.x * 0.65f, safeSize.y * 0.15f)
+                    .clickable {
+                        Database(context).startSleepPeriod(Database.SleepRecordInput(
+                            getCurrentTime(),
+                            defaultTimeToFallAsleepMinutes,
+                            defaultMinimumSleepDurationMinutes
+                        ))
+                        sleepControlsUpdate(context)
+                    }
+            ) {}
+
+            Box(
+                Modifier
+                    .freePosition(safeSize.x * 0.7f, safeSize.y * 0.6f, safeSize.x * 0.3f, safeSize.y * 0.15f)
+                    .clickable {
+                        Database(context).endSleepPeriod(Database.SleepRecordInput(
+                            getCurrentTime(),
+                            defaultTimeToFallAsleepMinutes,
+                            defaultMinimumSleepDurationMinutes
+                        ))
+                        sleepControlsUpdate(context)
+                    }
+            ) {}
         }
 
         Column(Modifier.fillMaxSize()) {
@@ -320,7 +334,12 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
 
 @Preview
 @Composable
-fun Preview() {
+fun BedroomPreview() {
+    BedroomScreen(0f, {})
+}
+
+@Composable
+fun DetailsPreview() {
     val records = listOf<SleepRecord>(
         SleepRecord(
             0,
@@ -659,7 +678,7 @@ fun SleepPeriodDetailsScreenDisplay(info: SavedSleepPeriodData, records: List<Sl
             Text("Кол-во ночных пробуждений: " + info.interruptionCount)
             Text("Время сна: " + durationToHHMM(info.totalSleepDuration))
             Text("Время лежания в кровати: " + durationToHHMM(info.durationBeforeFallingAsleep))
-            Text("Соннай долг: " + durationToHHMM(info.sleepBalance))
+            Text("Сонный долг: " + durationToHHMM(info.sleepBalance))
 
             Row(Modifier.weight(1f)) {}
 
@@ -712,7 +731,8 @@ fun CellarScreen(animatable: Float, toBedroom: () -> Unit) {
 }
 
 @Composable
-fun Main() {
+fun Main(showQualityDialogForS: MutableState<Int?>) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     val bedroomAnimatableS = remember { mutableStateOf<Animatable<Float, AnimationVector1D>?>(Animatable(0.0f)) }
@@ -720,6 +740,31 @@ fun Main() {
 
     val bedroomAnimatable = bedroomAnimatableS.value
     val cellarAnimatable = cellarAnimatableS.value
+
+    val showQualityDialogFor = showQualityDialogForS.value
+
+    if(showQualityDialogFor != null) {
+        fun selectQuality(quality: Int) {
+            val db = Database(context)
+            db.setSleepQuality(showQualityDialogFor, quality)
+            showQualityDialogForS.value = null
+        }
+
+        Dialog(
+            onDismissRequest = { selectQuality(0) },
+        ) {
+            Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 8.dp,) {
+                Column(Modifier.padding(10.dp)) {
+                    Text("Как спалось?", Modifier.align(Alignment.CenterHorizontally))
+                    Button({ selectQuality(5) }, Modifier.fillMaxWidth()) { Text("Замечательно") }
+                    Button({ selectQuality(4) }, Modifier.fillMaxWidth()) { Text("Не идеально") }
+                    Button({ selectQuality(3) }, Modifier.fillMaxWidth()) { Text("Не очень") }
+                    Button({ selectQuality(2) }, Modifier.fillMaxWidth()) { Text("Ужасно") }
+                    Button({ selectQuality(1) }, Modifier.fillMaxWidth()) { Text("Не спал") }
+                }
+            }
+        }
+    }
 
     if(bedroomAnimatable != null) {
         BedroomScreen(
@@ -1027,9 +1072,6 @@ fun durationSecToString(value: Long): String {
 
     return "$sign$hours ч. $minutes мин. $seconds сек."
 }
-
-val defaultTimeToFallAsleepMinutes = 15L
-val defaultMinimumSleepDurationMinutes = 10L
 
 class SleepNotificationActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
