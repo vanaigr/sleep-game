@@ -53,6 +53,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
@@ -392,7 +393,7 @@ fun DetailsPreview() {
     }
      */
 
-    SleepPeriodDetailsScreenDisplay(info, records)
+    SleepPeriodDetailsScreenDisplay(info, records, { })
 }
 
 @Composable
@@ -479,7 +480,7 @@ fun durationToHHMM(duration: Duration): String {
 }
 
 @Composable
-fun SleepPeriodDetailsScreen(info: SavedSleepPeriodData) {
+fun SleepPeriodDetailsScreen(info: SavedSleepPeriodData, close: () -> Unit) {
     val context = LocalContext.current
 
     val records = remember {
@@ -491,11 +492,11 @@ fun SleepPeriodDetailsScreen(info: SavedSleepPeriodData) {
         records
     }
 
-    SleepPeriodDetailsScreenDisplay(info, records)
+    SleepPeriodDetailsScreenDisplay(info, records, close)
 }
 
 @Composable
-fun SleepPeriodDetailsScreenDisplay(info: SavedSleepPeriodData, records: List<SleepRecord>) {
+fun SleepPeriodDetailsScreenDisplay(info: SavedSleepPeriodData, records: List<SleepRecord>, close: () -> Unit) {
     val TAG = "SleepPeriodDetailsScreenDisplay"
 
     val context = LocalContext.current
@@ -692,7 +693,7 @@ fun SleepPeriodDetailsScreenDisplay(info: SavedSleepPeriodData, records: List<Sl
 
             Row(Modifier.weight(1f)) {}
 
-            Button({ Database(context).deleteSleepPeriod(info.periodId) }, Modifier.fillMaxWidth()) {
+            Button({ Database(context).deleteSleepPeriod(info.periodId); close() }, Modifier.fillMaxWidth()) {
                 Text("Удалить")
             }
         }
@@ -702,7 +703,8 @@ fun SleepPeriodDetailsScreenDisplay(info: SavedSleepPeriodData, records: List<Sl
 @Composable
 fun CellarScreen(animatable: Float, toBedroom: () -> Unit) {
     val context = LocalContext.current
-    val sleepPeriods = remember { Database(context).getAllSleepPeriodData() }
+    val sleepRecordsId = remember { mutableIntStateOf(0) }
+    val sleepPeriods = remember(key1 = sleepRecordsId.value) { Database(context).getAllSleepPeriodData() }
     val currentTimezone = getCurrentTime().zone
 
     val detailsToShowS = remember { mutableStateOf<SavedSleepPeriodData?>(null) }
@@ -712,7 +714,10 @@ fun CellarScreen(animatable: Float, toBedroom: () -> Unit) {
         BackHandler {
             detailsToShowS.value = null
         }
-        SleepPeriodDetailsScreen(detailsToShow)
+        SleepPeriodDetailsScreen(detailsToShow, {
+            detailsToShowS.value = null
+            sleepRecordsId.value++
+        })
         return
     }
 
