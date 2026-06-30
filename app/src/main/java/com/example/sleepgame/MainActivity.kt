@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -185,6 +186,7 @@ fun BoxScope.ScreenPositioning(
 @Composable
 fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
     val context = LocalContext.current
+    val currentTimezone = getCurrentTime().zone
 
     Screen(
         Modifier
@@ -245,6 +247,40 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
                     .aspectRatio(board.intrinsicSize.width / board.intrinsicSize.height)
             )
 
+            val statsText = run {
+                if(LocalInspectionMode.current) return@run ""
+
+                val db = Database(context)
+                val info = db.getLatestSleepPeriodData() ?: return@run "Пока нет данных"
+
+                // @formatter:off
+                return@run arrayOf(
+                    "Время пробуждения: "
+                        + (
+                            info.fallAsleep?.let { it.atZone(currentTimezone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")) }
+                                ?: "Н/Д"
+                        ),
+                    "Время засыпания: "
+                        + (
+                            info.wakeUp?.let { it.atZone(currentTimezone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")) }
+                                ?: "Н/Д"
+                        ),
+                    "Качество: " + qualityToString(info.quality),
+                    "Продолжительность: " + durationToHHMM(info.totalSleepDuration),
+                ).joinToString("\n")
+                // @formatter:on
+            }
+
+            val offset = 50
+            Text(
+                statsText,
+                Modifier.freePosition(
+                    safeSize.x * 0.5f + offset, safeSize.y * 0.3f + offset,
+                    safeSize.x * 0.4f - offset * 2, safeSize.y * 0.26f - offset * 2
+                ),
+                style = TextStyle(fontSize = 9.sp),
+            )
+
             // Click areas
 
             Box(
@@ -290,9 +326,9 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
 
 @Composable
 fun CurrentTimeDebug() {
-    val activity = MainActivityTracker.resumedActivity!!
+    val activity = MainActivityTracker.resumedActivity
 
-    val overrideTime = activity.overrideTimeS.value
+    val overrideTime = activity?.overrideTimeS?.value
 
     val timeTextS = remember { mutableStateOf(TextFieldValue("")) }
     val overridingTimeS = remember { mutableStateOf(false) }
@@ -314,10 +350,10 @@ fun CurrentTimeDebug() {
 
     val parsedTime = try { ZonedDateTime.parse(timeTextS.value.text) } catch(_: Exception) { null }
     if(overridingTimeS.value && parsedTime != null) {
-        activity.overrideTimeS.value = parsedTime
+        activity?.overrideTimeS?.value = parsedTime
     }
     else {
-        activity.overrideTimeS.value = null
+        activity?.overrideTimeS?.value = null
     }
 
     Column(Modifier.fillMaxWidth()) {
@@ -422,14 +458,7 @@ fun CellarSleepPeriodListItem(
                     DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(locale)
                 )
 
-                val qualityText = when (info.quality) {
-                    1 -> "Не спал"
-                    2 -> "Ужасно"
-                    3 -> "Не очень"
-                    4 -> "Не идеально"
-                    5 -> "Замечательно"
-                    else -> "Не записано"
-                }
+                val qualityText = qualityToString(info.quality)
                 val sleepDurationText = durationToHHMM(info.sleepBalance)
 
                 Text(dateText ?: "Unknown", Modifier.weight(1.0f).padding(end = 5.dp))
@@ -477,6 +506,17 @@ fun durationToHHMM(duration: Duration): String {
     val minutes = totalMinutes - hours * 60
 
     return sign + hours + ":" + minutes.toString().padStart(2, '0')
+}
+
+fun qualityToString(quality: Int): String {
+    return when (quality) {
+        1 -> "Не спал"
+        2 -> "Ужасно"
+        3 -> "Не очень"
+        4 -> "Не идеально"
+        5 -> "Замечательно"
+        else -> "Не записано"
+    }
 }
 
 @Composable
@@ -771,11 +811,11 @@ fun Main(showQualityDialogForS: MutableState<Int?>) {
             Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 8.dp,) {
                 Column(Modifier.padding(10.dp)) {
                     Text("Как спалось?", Modifier.align(Alignment.CenterHorizontally))
-                    Button({ selectQuality(5) }, Modifier.fillMaxWidth()) { Text("Замечательно") }
-                    Button({ selectQuality(4) }, Modifier.fillMaxWidth()) { Text("Не идеально") }
-                    Button({ selectQuality(3) }, Modifier.fillMaxWidth()) { Text("Не очень") }
-                    Button({ selectQuality(2) }, Modifier.fillMaxWidth()) { Text("Ужасно") }
-                    Button({ selectQuality(1) }, Modifier.fillMaxWidth()) { Text("Не спал") }
+                    Button({ selectQuality(5) }, Modifier.fillMaxWidth()) { Text(qualityToString(5)) }
+                    Button({ selectQuality(4) }, Modifier.fillMaxWidth()) { Text(qualityToString(4)) }
+                    Button({ selectQuality(3) }, Modifier.fillMaxWidth()) { Text(qualityToString(3)) }
+                    Button({ selectQuality(2) }, Modifier.fillMaxWidth()) { Text(qualityToString(2)) }
+                    Button({ selectQuality(1) }, Modifier.fillMaxWidth()) { Text(qualityToString(1)) }
                 }
             }
         }
