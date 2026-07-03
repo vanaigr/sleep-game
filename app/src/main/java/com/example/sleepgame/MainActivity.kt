@@ -257,12 +257,12 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
                 return@run arrayOf(
                     "Время пробуждения: "
                         + (
-                            info.fallAsleep?.let { it.atZone(currentTimezone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")) }
+                            info.wakeUp?.let { it.atZone(currentTimezone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")) }
                                 ?: "Н/Д"
                         ),
                     "Время засыпания: "
                         + (
-                            info.wakeUp?.let { it.atZone(currentTimezone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")) }
+                            info.fallAsleep?.let { it.atZone(currentTimezone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")) }
                                 ?: "Н/Д"
                         ),
                     "Качество: " + qualityToString(info.quality),
