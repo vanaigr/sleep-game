@@ -141,8 +141,8 @@ class MainActivity: ComponentActivity() {
 }
 
 
-val safeSize = Vector2(1080.0f, 2160.0f)
-val maxSize = Vector2(1620.0f, 2520.0f)
+val safeSize = Offset(1080.0f, 2160.0f)
+val maxSize = Offset(1620.0f, 2520.0f)
 val minAspect = 9.0f / 21.0f
 val maxAspect = 3.0f / 4.0f
 
@@ -177,8 +177,8 @@ fun BoxScope.ScreenPositioning(
     val aspect = clamp(screenWidth / screenHeight, minAspect, maxAspect)
     val safeAspect = safeSize.x / safeSize.y
 
-    val size = if(aspect < safeAspect) Vector2(screenWidth, screenWidth / safeAspect)
-    else Vector2(screenHeight * safeAspect, screenHeight)
+    val size = if(aspect < safeAspect) Offset(screenWidth, screenWidth / safeAspect)
+    else Offset(screenHeight * safeAspect, screenHeight)
 
     FreeLayout(
         safeSize,

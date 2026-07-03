@@ -2,6 +2,7 @@ package com.example.sleepgame
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.ParentDataModifier
 import androidx.compose.ui.unit.Constraints
@@ -39,7 +40,7 @@ fun Modifier.freePosition(
 
 @Composable
 fun FreeLayout(
-    innerUnits: Vector2<Float>,
+    innerUnits: Offset,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
