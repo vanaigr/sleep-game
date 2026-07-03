@@ -51,10 +51,12 @@ import java.time.ZonedDateTime
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
@@ -82,7 +84,6 @@ import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.toKotlinDuration
 
 object MainActivityTracker : ActivityTracker<MainActivity>()
@@ -92,6 +93,7 @@ class MainActivity: ComponentActivity() {
     var overrideTimeS = mutableStateOf<ZonedDateTime?>(null)
 
     val showQualityDialogForS = mutableStateOf<Int?>(null)
+    lateinit var database: Database
 
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -106,6 +108,8 @@ class MainActivity: ComponentActivity() {
         super.onCreate(savedInstanceState)
         createSleepControlsChannel(this)
 
+        database = Database.forApp(this)
+
         registerReceiver(screenStateReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_USER_PRESENT)
@@ -114,7 +118,9 @@ class MainActivity: ComponentActivity() {
         MainActivityTracker.attach(this)
 
         setContent {
-            Main(showQualityDialogForS)
+            CompositionLocalProvider(DbContext provides database) {
+                Main(showQualityDialogForS)
+            }
         }
     }
 
@@ -144,6 +150,7 @@ val maxAspect = 3.0f / 4.0f
 val defaultTimeToFallAsleepMinutes = 15L
 val defaultMinimumSleepDurationMinutes = 10L
 
+val DbContext = staticCompositionLocalOf<Database?> { null }
 
 @Composable
 inline fun Screen(
@@ -183,6 +190,7 @@ fun BoxScope.ScreenPositioning(
 
 @Composable
 fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
+    val db = DbContext.current
     val context = LocalContext.current
     val currentTimezone = getCurrentTime().zone
 
@@ -248,8 +256,7 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
             val statsText = run {
                 if(LocalInspectionMode.current) return@run ""
 
-                val db = Database(context)
-                val info = db.getLatestSleepPeriodData() ?: return@run "Пока нет данных"
+                val info = db?.getLatestSleepPeriodData() ?: return@run "Пока нет данных"
 
                 // @formatter:off
                 return@run arrayOf(
@@ -285,7 +292,7 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
                 Modifier
                     .freePosition(0f, safeSize.y * 0.7f, safeSize.x * 0.65f, safeSize.y * 0.15f)
                     .clickable {
-                        Database(context).startSleepPeriod(Database.SleepRecordInput(
+                        db?.startSleepPeriod(Database.SleepRecordInput(
                             getCurrentTime(),
                             defaultTimeToFallAsleepMinutes,
                             defaultMinimumSleepDurationMinutes
@@ -298,7 +305,7 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
                 Modifier
                     .freePosition(safeSize.x * 0.7f, safeSize.y * 0.6f, safeSize.x * 0.3f, safeSize.y * 0.15f)
                     .clickable {
-                        Database(context).endSleepPeriod(Database.SleepRecordInput(
+                        db?.endSleepPeriod(Database.SleepRecordInput(
                             getCurrentTime(),
                             defaultTimeToFallAsleepMinutes,
                             defaultMinimumSleepDurationMinutes
@@ -519,12 +526,10 @@ fun qualityToString(quality: Int): String {
 
 @Composable
 fun SleepPeriodDetailsScreen(info: SavedSleepPeriodData, close: () -> Unit) {
-    val context = LocalContext.current
+    val db = DbContext.current
 
     val records = remember {
-        val db = Database(context)
-
-        val records = db.getAllRecordsForPeriod(info.periodId)
+        val records = db?.getAllRecordsForPeriod(info.periodId) ?: mutableListOf()
         records.sortWith { a, b -> a.recordedTime.compareTo(b.recordedTime) }
 
         records
@@ -537,7 +542,7 @@ fun SleepPeriodDetailsScreen(info: SavedSleepPeriodData, close: () -> Unit) {
 fun SleepPeriodDetailsScreenDisplay(info: SavedSleepPeriodData, records: List<SleepRecord>, close: () -> Unit) {
     val TAG = "SleepPeriodDetailsScreenDisplay"
 
-    val context = LocalContext.current
+    val db = DbContext.current
     val currentTimezone = remember { getCurrentTime().zone }
 
     val textMeasurer = rememberTextMeasurer()
@@ -731,7 +736,7 @@ fun SleepPeriodDetailsScreenDisplay(info: SavedSleepPeriodData, records: List<Sl
 
             Row(Modifier.weight(1f)) {}
 
-            Button({ Database(context).deleteSleepPeriod(info.periodId); close() }, Modifier.fillMaxWidth()) {
+            Button({ db?.deleteSleepPeriod(info.periodId); close() }, Modifier.fillMaxWidth()) {
                 Text("Удалить")
             }
         }
@@ -740,9 +745,9 @@ fun SleepPeriodDetailsScreenDisplay(info: SavedSleepPeriodData, records: List<Sl
 
 @Composable
 fun CellarScreen(animatable: Float, toBedroom: () -> Unit) {
-    val context = LocalContext.current
+    val db = DbContext.current
     val sleepRecordsId = remember { mutableIntStateOf(0) }
-    val sleepPeriods = remember(key1 = sleepRecordsId.value) { Database(context).getAllSleepPeriodData() }
+    val sleepPeriods = remember(key1 = sleepRecordsId.intValue) { db?.getAllSleepPeriodData() ?: listOf() }
     val currentTimezone = getCurrentTime().zone
 
     val detailsToShowS = remember { mutableStateOf<SavedSleepPeriodData?>(null) }
@@ -785,8 +790,8 @@ fun CellarScreen(animatable: Float, toBedroom: () -> Unit) {
 
 @Composable
 fun Main(showQualityDialogForS: MutableState<Int?>) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val db = DbContext.current
 
     val bedroomAnimatableS = remember { mutableStateOf<Animatable<Float, AnimationVector1D>?>(Animatable(0.0f)) }
     val cellarAnimatableS = remember { mutableStateOf<Animatable<Float, AnimationVector1D>?>(null) }
@@ -798,8 +803,7 @@ fun Main(showQualityDialogForS: MutableState<Int?>) {
 
     if(showQualityDialogFor != null) {
         fun selectQuality(quality: Int) {
-            val db = Database(context)
-            db.setSleepQuality(showQualityDialogFor, quality)
+            db?.setSleepQuality(showQualityDialogFor, quality)
             showQualityDialogForS.value = null
         }
 

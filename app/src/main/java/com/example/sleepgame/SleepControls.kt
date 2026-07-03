@@ -25,7 +25,7 @@ private val sleepControlsNotificationId = 1001
 
 
 fun sleepControlsUpdate(context: Context) {
-    val period = Database(context).getLatestSleepPeriod()
+    val period = Database.forApp(context).getLatestSleepPeriod()
     if(period == null || period.ended) sleepControlsHide(context)
     else sleepControlsShow(context)
 
@@ -47,7 +47,7 @@ fun sleepQualityUpdate() {
         return
     }
 
-    val db = Database(activity)
+    val db = activity.database
     val periodId = db.shouldShowQualityDialog() ?: return
 
     activity.showQualityDialogForS.value = periodId
@@ -139,7 +139,7 @@ fun sleepControlsShow(context: Context) {
 
 class SleepNotificationActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val db = Database(context)
+        val db = Database.forApp(context)
         when (intent.action) {
             actionRecordWakeUp -> {
                 db.recordWakeUp(Database.SleepRecordInput(getCurrentTime(), defaultTimeToFallAsleepMinutes, defaultMinimumSleepDurationMinutes))

@@ -13,6 +13,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.util.WeakHashMap
 
 ///------------------------------------------///
 /// NO. RETURNS. IN. TRANSACTIONS.           ///
@@ -23,7 +24,7 @@ import java.time.format.DateTimeFormatter
 class Database {
     private val db: SQLiteDatabase
 
-    constructor(context: Context) {
+    private constructor(context: Context) {
         db = SQLiteDatabase.openOrCreateDatabase(
             File(context.filesDir, "sqlite.db").absolutePath,
             null,
@@ -480,6 +481,16 @@ class Database {
 
     companion object {
         val TAG = "Database"
+
+        private val instanceByContext = WeakHashMap<Context, Database>()
+
+        fun forApp(context: Context): Database {
+            val app = context.applicationContext
+
+            return synchronized(this) {
+                instanceByContext.getOrPut(app) {Database(app) }
+            }
+        }
     }
 }
 
