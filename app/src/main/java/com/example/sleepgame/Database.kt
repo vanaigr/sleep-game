@@ -101,7 +101,7 @@ class Database {
             if(db.version == 6) {
                 db.execSQL("update sleep_records set minimum_sleep_duration_minutes = 15")
                 db.execSQL("update sleep_records set time_to_fall_asleep_minutes = 10 where \"type\" = 'interruption'")
-                updateAllSleepPeriods()
+                updateAllSleepPeriods_v7()
                 db.version = 7
             }
             if(db.version == 7) {
@@ -433,6 +433,50 @@ class Database {
 
         return curPeriodId
     }
+
+
+    fun updateAllSleepPeriods_v7() {
+        val periodIds = db.rawQuery("select distinct period_id from sleep_records order by period_id", arrayOf()).use {
+            val result = mutableListOf<Int>()
+            while(it.moveToNext()) result.add(it.getInt(0))
+            result
+        }
+        for(periodId in periodIds) updateSavedSleepPeriod_v7(periodId)
+    }
+
+
+    fun updateSavedSleepPeriod_v7(periodId: Int) {
+        val records = getAllRecordsForPeriod(periodId)
+        records.sortWith { a, b -> a.recordedTime.compareTo(b.recordedTime) }
+        val data = calculateSleepPeriodData(records)
+
+        val lastSleepBalance = db.rawQuery(
+            "select sleep_balance_duration from complete_sleep_periods where deleted = 0 and period_id < ? order by period_id desc limit 1",
+            arrayOf("" + periodId)
+        ).use {
+            if(it.moveToNext()) decodeDuration(it.getString(0))
+            else Duration.ZERO
+        }
+
+        // NOTE: expects that a person records every day, even if they haven't slept
+        val sleepBalance = lastSleepBalance + data.totalSleepDuration - Duration.ofHours(8)
+        db.insertWithOnConflict(
+            "complete_sleep_periods",
+            null,
+            ContentValues().apply {
+                put("period_id", periodId)
+                put("fall_asleep_time", data.fallAsleep?.let { encodeInstant(it) })
+                put("wake_up_time", data.wakeUp?.let { encodeInstant(it) })
+                put("sleep_duration", encodeDuration(data.totalSleepDuration))
+                put("duration_before_falling_asleep", encodeDuration(data.durationBeforeFallingAsleep))
+                put("interruption_count", data.interruptionCount)
+                put("sleep_balance_duration", encodeDuration(sleepBalance))
+                put("deleted", 0)
+            },
+            SQLiteDatabase.CONFLICT_REPLACE
+        )
+    }
+
 
     companion object {
         val TAG = "Database"
