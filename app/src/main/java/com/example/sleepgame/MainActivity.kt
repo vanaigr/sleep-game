@@ -253,6 +253,8 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
                     .aspectRatio(board.intrinsicSize.width / board.intrinsicSize.height)
             )
 
+            db?.sleepPeriodsVersion?.value
+
             val statsText = run {
                 if(LocalInspectionMode.current) return@run ""
 
@@ -527,6 +529,7 @@ fun qualityToString(quality: Int): String {
 @Composable
 fun SleepPeriodDetailsScreen(info: SavedSleepPeriodData, close: () -> Unit) {
     val db = DbContext.current
+    db?.sleepPeriodsVersion?.value
 
     val records = remember {
         val records = db?.getAllRecordsForPeriod(info.periodId) ?: mutableListOf()
@@ -746,8 +749,7 @@ fun SleepPeriodDetailsScreenDisplay(info: SavedSleepPeriodData, records: List<Sl
 @Composable
 fun CellarScreen(animatable: Float, toBedroom: () -> Unit) {
     val db = DbContext.current
-    val sleepRecordsId = remember { mutableIntStateOf(0) }
-    val sleepPeriods = remember(key1 = sleepRecordsId.intValue) { db?.getAllSleepPeriodData() ?: listOf() }
+    val sleepPeriods = remember(key1 = db?.sleepPeriodsVersion?.value) { db?.getAllSleepPeriodData() ?: listOf() }
     val currentTimezone = getCurrentTime().zone
 
     val detailsToShowS = remember { mutableStateOf<SavedSleepPeriodData?>(null) }
@@ -759,7 +761,6 @@ fun CellarScreen(animatable: Float, toBedroom: () -> Unit) {
         }
         SleepPeriodDetailsScreen(detailsToShow, {
             detailsToShowS.value = null
-            sleepRecordsId.value++
         })
         return
     }
