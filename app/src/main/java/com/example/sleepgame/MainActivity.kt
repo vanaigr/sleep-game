@@ -194,13 +194,12 @@ fun BoxScope.ScreenPositioning(
 
 @Composable
 fun SettingsDialogRow(title: String, value: String, modifier: Modifier) {
-     Row(modifier.padding(vertical = 20.dp, horizontal = 20.dp)) {
-         Text(title, Modifier.padding(end = 10.dp))
+     Column(modifier.padding(vertical = 10.dp, horizontal = 20.dp)) {
+         Text(title, Modifier.padding(bottom = 5.dp), style = TextStyle(fontSize = 14.sp))
          BasicText(
              value,
-             Modifier.weight(1f),
              overflow = TextOverflow.Ellipsis,
-             style = TextStyle(textAlign = TextAlign.End),
+             style = TextStyle(textAlign = TextAlign.End, color = Color(100, 100, 100)),
          )
     }
 }
