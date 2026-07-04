@@ -14,6 +14,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Optional
 import java.util.WeakHashMap
 
 ///------------------------------------------///
@@ -114,15 +115,132 @@ class Database {
                 updateAllSleepPeriods()
                 db.version = 8
             }
+            if(db.version == 8) {
+                db.execSQL(
+                    """create table settings(
+                    |    time_to_fall_asleep_minutes integer not null,
+                    |    time_to_fall_asleep_after_interruption_minutes integer not null,
+                    |    normal_sleep_time_hours integer not null,
+                    |    sleep_quality_dialog_title text not null,
+                    |    sleep_quality_dialog_q5_text text not null,
+                    |    sleep_quality_dialog_q4_text text not null,
+                    |    sleep_quality_dialog_q3_text text not null,
+                    |    sleep_quality_dialog_q2_text text not null,
+                    |    sleep_quality_dialog_q1_text text not null
+                    )""".trimMargin()
+                )
+
+                db.execSQL(
+                    """insert into settings(
+                    |    time_to_fall_asleep_minutes,
+                    |    time_to_fall_asleep_after_interruption_minutes,
+                    |    normal_sleep_time_hours,
+                    |    sleep_quality_dialog_title,
+                    |    sleep_quality_dialog_q5_text,
+                    |    sleep_quality_dialog_q4_text,
+                    |    sleep_quality_dialog_q3_text,
+                    |    sleep_quality_dialog_q2_text,
+                    |    sleep_quality_dialog_q1_text
+                    |)
+                    |values (10, 15, 8, "", "", "", "", "", "")
+                    |""".trimMargin()
+                )
+
+                db.execSQL("alter table complete_sleep_periods add column normal_sleep_duration_hours integer not null default 8")
+
+                db.version = 9
+            }
         }
+    }
+
+    data class Settings(
+        val time_to_fall_asleep_minutes: Int,
+        val time_to_fall_asleep_after_interruption_minutes: Int,
+        val normal_sleep_time_hours: Int,
+        val sleep_quality_dialog_title: String,
+        val sleep_quality_dialog_q5_text: String,
+        val sleep_quality_dialog_q4_text: String,
+        val sleep_quality_dialog_q3_text: String,
+        val sleep_quality_dialog_q2_text: String,
+        val sleep_quality_dialog_q1_text: String,
+    )
+
+    data class SettingsUpdate(
+        val time_to_fall_asleep_minutes: Int?,
+        val time_to_fall_asleep_after_interruption_minutes: Int?,
+        val normal_sleep_time_hours: Int?,
+        val sleep_quality_dialog_title: String?,
+        val sleep_quality_dialog_q5_text: String?,
+        val sleep_quality_dialog_q4_text: String?,
+        val sleep_quality_dialog_q3_text: String?,
+        val sleep_quality_dialog_q2_text: String?,
+        val sleep_quality_dialog_q1_text: String?,
+    ) {
+        companion object {
+            val empty = SettingsUpdate(
+                null, null, null,
+                null, null, null, null,
+                null, null
+            )
+        }
+    }
+
+    fun getSettings(): Settings {
+        return db.rawQuery(
+            """select
+            |    time_to_fall_asleep_minutes,
+            |    time_to_fall_asleep_after_interruption_minutes,
+            |    normal_sleep_time_hours,
+            |    sleep_quality_dialog_title,
+            |    sleep_quality_dialog_q5_text,
+            |    sleep_quality_dialog_q4_text,
+            |    sleep_quality_dialog_q3_text,
+            |    sleep_quality_dialog_q2_text,
+            |    sleep_quality_dialog_q1_text
+            |from settings
+            """.trimMargin(),
+            arrayOf()
+        ).use {
+            it.moveToNext()
+            Settings(
+               it.getInt(0),
+               it.getInt(1),
+               it.getInt(2),
+               it.getString(3),
+               it.getString(4),
+               it.getString(5),
+               it.getString(6),
+               it.getString(7),
+               it.getString(8),
+           )
+        }
+    }
+
+    fun updateSettings(update: SettingsUpdate) {
+        db.update(
+            "settings",
+            ContentValues().apply {
+                update.time_to_fall_asleep_minutes?.let { put("time_to_fall_asleep_minutes", it) }
+                update.time_to_fall_asleep_after_interruption_minutes?.let { put("time_to_fall_asleep_after_interruption_minutes", it) }
+                update.normal_sleep_time_hours?.let { put("normal_sleep_time_hours", it) }
+                update.sleep_quality_dialog_title?.let { put("sleep_quality_dialog_title", it) }
+                update.sleep_quality_dialog_q5_text?.let { put("sleep_quality_dialog_q5_text", it) }
+                update.sleep_quality_dialog_q4_text?.let { put("sleep_quality_dialog_q4_text", it) }
+                update.sleep_quality_dialog_q3_text?.let { put("sleep_quality_dialog_q3_text", it) }
+                update.sleep_quality_dialog_q2_text?.let { put("sleep_quality_dialog_q2_text", it) }
+                update.sleep_quality_dialog_q1_text?.let { put("sleep_quality_dialog_q1_text", it) }
+            },
+            null,
+            arrayOf()
+        )
     }
 
     private fun updateSavedSleepPeriod(periodId: Int, creatingLatest: Boolean) {
         sleepPeriodsVersion.value++
-        updateSavedSleepPeriod_inner(periodId, creatingLatest)
+        updateSavedSleepPeriod_inner(periodId, creatingLatest, getSettings().normal_sleep_time_hours)
     }
 
-    private fun updateSavedSleepPeriod_inner(periodId: Int, creatingLatest: Boolean) {
+    private fun updateSavedSleepPeriod_inner(periodId: Int, creatingLatest: Boolean, normalSleepDurationHours: Int) {
         val records = getAllRecordsForPeriod(periodId)
         records.sortWith { a, b -> a.recordedTime.compareTo(b.recordedTime) }
         val data = calculateSleepPeriodData(records)
@@ -135,9 +253,14 @@ class Database {
             else Duration.ZERO
         }
 
-        val existingResetSleepBalance = db.rawQuery("select reset_sleep_balance from complete_sleep_periods where period_id = ?", arrayOf("" + periodId)).use {
-            if(it.moveToNext()) it.getInt(0) != 0
-            else null
+        val (existingResetSleepBalance, existingNormalSleepDurationHours) = db.rawQuery(
+            """select reset_sleep_balance, normal_sleep_duration_hours 
+                |from complete_sleep_periods where period_id = ?
+                |""".trimMargin(),
+            arrayOf("" + periodId)
+        ).use {
+            if(it.moveToNext()) Pair(it.getInt(0) != 0, it.getInt(1))
+            else Pair(null, null)
         }
         val resetSleepBalance = (fun(): Boolean {
             if (existingResetSleepBalance != null) return existingResetSleepBalance
@@ -152,8 +275,10 @@ class Database {
             return true
         })()
 
+        val finalNormalSleepDuration = /*existingNormalSleepDurationHours ?: TODO: should it actually preserve?*/normalSleepDurationHours
+
         // NOTE: expects that a person records every day, even if they haven't slept
-        val sleepBalance = (Duration.ofHours(8) - data.totalSleepDuration) + (if(resetSleepBalance) Duration.ZERO else lastSleepBalance)
+        val sleepBalance = (Duration.ofHours(finalNormalSleepDuration.toLong()) - data.totalSleepDuration) + (if(resetSleepBalance) Duration.ZERO else lastSleepBalance)
         db.insertWithOnConflict(
             "complete_sleep_periods",
             null,
@@ -167,6 +292,7 @@ class Database {
                 put("sleep_balance_duration", encodeDuration(sleepBalance))
                 put("deleted", 0)
                 put("reset_sleep_balance", if(resetSleepBalance) 1 else 0)
+                put("normal_sleep_duration_hours", finalNormalSleepDuration)
             },
             SQLiteDatabase.CONFLICT_REPLACE
         )
@@ -185,7 +311,7 @@ class Database {
         }
         for((periodId, resetSleepBalance) in periodIds) {
             if(resetSleepBalance) break
-            updateSavedSleepPeriod_inner(periodId, false)
+            updateSavedSleepPeriod_inner(periodId, false, getSettings().normal_sleep_time_hours)
         }
     }
 
@@ -196,7 +322,7 @@ class Database {
             while(it.moveToNext()) result.add(it.getInt(0))
             result
         }
-        for(periodId in periodIds) updateSavedSleepPeriod_inner(periodId, false)
+        for(periodId in periodIds) updateSavedSleepPeriod_inner(periodId, false, getSettings().normal_sleep_time_hours)
     }
 
     fun getSleepDataVersion(): Long {

@@ -31,9 +31,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -54,7 +56,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -68,6 +69,8 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import androidx.compose.ui.window.Dialog
@@ -146,9 +149,7 @@ val maxSize = Offset(1620.0f, 2520.0f)
 val minAspect = 9.0f / 21.0f
 val maxAspect = 3.0f / 4.0f
 
-
-val defaultTimeToFallAsleepMinutes = 15L
-val defaultMinimumSleepDurationMinutes = 10L
+val defaultMinimumSleepDurationMinutes = 15L
 
 val DbContext = staticCompositionLocalOf<Database?> { null }
 
@@ -162,7 +163,9 @@ inline fun Screen(
     val screenWidth = configuration.screenWidthDp.dp
     val screenHeight = configuration.screenHeightDp.dp
 
-    Box(modifier.size(screenWidth, screenHeight).clip(RectangleShape), content = content)
+    Box(modifier
+        .size(screenWidth, screenHeight)
+        .clip(RectangleShape), content = content)
 }
 
 @Composable
@@ -182,10 +185,320 @@ fun BoxScope.ScreenPositioning(
 
     FreeLayout(
         safeSize,
-        Modifier.size(size.x.dp, size.y.dp)
+        Modifier
+            .size(size.x.dp, size.y.dp)
             .align(Alignment.Center),
         content = content
     )
+}
+
+@Composable
+fun SettingsDialogRow(title: String, value: String, modifier: Modifier) {
+     Row(modifier.padding(vertical = 20.dp, horizontal = 20.dp)) {
+         Text(title, Modifier.padding(end = 10.dp))
+         BasicText(
+             value,
+             Modifier.weight(1f),
+             overflow = TextOverflow.Ellipsis,
+             style = TextStyle(textAlign = TextAlign.End),
+         )
+    }
+}
+
+@Composable
+fun IntValueDialog(
+    title: String,
+    value: Int,
+    close: () -> Unit,
+    save: (value: Int) -> Unit,
+) {
+    val textFieldStateS = remember(key1 = value) { mutableStateOf(TextFieldValue("" + value)) }
+    val parsedValue = textFieldStateS.value.text.toIntOrNull()
+
+    Dialog(
+        onDismissRequest = { close() },
+    ) {
+        Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 8.dp) {
+            Column(Modifier.padding(10.dp)) {
+                Text(title, Modifier.align(Alignment.CenterHorizontally))
+                TextField(textFieldStateS.value, { textFieldStateS.value = it }, Modifier.fillMaxWidth())
+                Row {
+                    Row(Modifier.weight(1f)) {}
+                    Button({ close() }) {
+                        Text("Отмена")
+                    }
+                    Button({ save(parsedValue!!); close() }, enabled = parsedValue != null) {
+                        Text("Сохранить")
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+fun StringValueDialog(
+    title: String,
+    value: String,
+    close: () -> Unit,
+    save: (value: String) -> Unit,
+) {
+    val textFieldStateS = remember(key1 = value) { mutableStateOf(TextFieldValue(value)) }
+
+    Dialog(
+        onDismissRequest = { close() },
+    ) {
+        Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 8.dp) {
+            Column(Modifier.padding(10.dp)) {
+                Text(title, Modifier.align(Alignment.CenterHorizontally))
+                TextField(textFieldStateS.value, { textFieldStateS.value = it }, Modifier.fillMaxWidth())
+                Row {
+                    Row(Modifier.weight(1f)) {}
+                    Button({ close() }) {
+                        Text("Отмена")
+                    }
+                    Button({ save(textFieldStateS.value.text); close() }) {
+                        Text("Сохранить")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun QuestionDialog(
+    text: String,
+    close: () -> Unit,
+    act: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = { close() },
+    ) {
+        Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 8.dp) {
+            Column(Modifier.padding(10.dp)) {
+                Text(text, Modifier.align(Alignment.CenterHorizontally))
+                Row {
+                    Row(Modifier.weight(1f)) {}
+                    Button({ close() }) {
+                        Text("Нет")
+                    }
+                    Button({ act(); close() }) {
+                        Text("Да")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsScreen() {
+    val db = DbContext.current!!
+
+    val timeToFallAsleepAfterInterruptionS = remember { mutableStateOf(false) }
+    val timeToFallAsleepS = remember { mutableStateOf(false) }
+    val normalSleepTimeS = remember { mutableStateOf(false) }
+
+    val sleep_quality_dialog_titleS = remember { mutableStateOf(false) }
+    val sleep_quality_dialog_q5_textS = remember { mutableStateOf(false) }
+    val sleep_quality_dialog_q4_textS = remember { mutableStateOf(false) }
+    val sleep_quality_dialog_q3_textS = remember { mutableStateOf(false) }
+    val sleep_quality_dialog_q2_textS = remember { mutableStateOf(false) }
+    val sleep_quality_dialog_q1_textS = remember { mutableStateOf(false) }
+
+    val resetSleepBalanceS = remember { mutableStateOf(false) }
+
+    val settings = db.getSettings()
+
+    Screen(Modifier.background(Color.White)) {
+        Column(Modifier.fillMaxSize()) {
+            SettingsDialogRow(
+                "Время засыпания после ночного пробуждения",
+                "${settings.time_to_fall_asleep_after_interruption_minutes} мин.",
+                Modifier.clickable { timeToFallAsleepAfterInterruptionS.value = true }
+            )
+
+            SettingsDialogRow(
+                "Время засыпания",
+                "${settings.time_to_fall_asleep_minutes} мин.",
+                Modifier.clickable { timeToFallAsleepS.value = true }
+            )
+
+            SettingsDialogRow(
+                "Норма сна",
+                "${settings.normal_sleep_time_hours} ч.",
+                Modifier.clickable { normalSleepTimeS.value = true }
+            )
+
+            SettingsDialogRow(
+                "Текст вопроса про качество сна",
+                settings.sleep_quality_dialog_title,
+                Modifier.clickable { sleep_quality_dialog_titleS.value = true }
+            )
+
+            SettingsDialogRow(
+                "Текст кнопки \"Замечательно\" про качество сна",
+                settings.sleep_quality_dialog_q5_text,
+                Modifier.clickable { sleep_quality_dialog_q5_textS.value = true }
+            )
+
+                        SettingsDialogRow(
+                "Текст кнопки \"Не идеально\" про качество сна",
+                settings.sleep_quality_dialog_q4_text,
+                Modifier.clickable { sleep_quality_dialog_q4_textS.value = true }
+            )
+
+                        SettingsDialogRow(
+                "Текст кнопки \"Не очень\" про качество сна",
+                settings.sleep_quality_dialog_q3_text,
+                Modifier.clickable { sleep_quality_dialog_q3_textS.value = true }
+            )
+
+                        SettingsDialogRow(
+                "Текст кнопки \"Ужасно\" про качество сна",
+                settings.sleep_quality_dialog_q2_text,
+                Modifier.clickable { sleep_quality_dialog_q2_textS.value = true }
+            )
+
+                        SettingsDialogRow(
+                "Текст кнопки \"Не спал\" про качество сна",
+                settings.sleep_quality_dialog_q1_text,
+                Modifier.clickable { sleep_quality_dialog_q1_textS.value = true }
+            )
+
+            Button({ resetSleepBalanceS.value = true }, Modifier.fillMaxWidth()) {
+                Text("Обнулить сонный долг")
+            }
+        }
+    }
+
+    if(timeToFallAsleepAfterInterruptionS.value) {
+        IntValueDialog(
+            "Время засыпания после ночного пробуждения, мин.",
+            settings.time_to_fall_asleep_after_interruption_minutes,
+            { timeToFallAsleepAfterInterruptionS.value = false },
+            { value -> db.updateSettings(Database.SettingsUpdate.empty.copy(time_to_fall_asleep_after_interruption_minutes = value)) }
+        )
+    }
+
+    if(timeToFallAsleepS.value) {
+        IntValueDialog(
+            "Время засыпания, мин.",
+            settings.time_to_fall_asleep_minutes,
+            { timeToFallAsleepS.value = false },
+            { value -> db.updateSettings(Database.SettingsUpdate.empty.copy(time_to_fall_asleep_minutes = value)) }
+        )
+    }
+
+    if(normalSleepTimeS.value) {
+        IntValueDialog(
+            "Норма сна, ч.",
+            settings.normal_sleep_time_hours,
+            { normalSleepTimeS.value = false },
+            { value -> db.updateSettings(Database.SettingsUpdate.empty.copy(normal_sleep_time_hours = value)) }
+        )
+    }
+
+    if (sleep_quality_dialog_titleS.value) {
+        StringValueDialog(
+            "Текст вопроса про качество сна",
+            settings.sleep_quality_dialog_title,
+            { sleep_quality_dialog_titleS.value = false },
+            { value ->
+                db.updateSettings(
+                    Database.SettingsUpdate.empty.copy(
+                        sleep_quality_dialog_title = value
+                    )
+                )
+            }
+        )
+    }
+
+    if (sleep_quality_dialog_q5_textS.value) {
+        StringValueDialog(
+            "Текст кнопки \"Замечательно\" про качество сна",
+
+            settings.sleep_quality_dialog_q5_text,
+            { sleep_quality_dialog_q5_textS.value = false },
+            { value ->
+                db.updateSettings(
+                    Database.SettingsUpdate.empty.copy(
+                        sleep_quality_dialog_q5_text = value
+                    )
+                )
+            }
+        )
+    }
+
+    if (sleep_quality_dialog_q4_textS.value) {
+        StringValueDialog(
+            "Текст кнопки \"Не идеально\" про качество сна",
+            settings.sleep_quality_dialog_q4_text,
+            { sleep_quality_dialog_q4_textS.value = false },
+            { value ->
+                db.updateSettings(
+                    Database.SettingsUpdate.empty.copy(
+                        sleep_quality_dialog_q4_text = value
+                    )
+                )
+            }
+        )
+    }
+
+    if (sleep_quality_dialog_q3_textS.value) {
+        StringValueDialog(
+            "Текст кнопки \"Не очень\" про качество сна",
+            settings.sleep_quality_dialog_q3_text,
+            { sleep_quality_dialog_q3_textS.value = false },
+            { value ->
+                db.updateSettings(
+                    Database.SettingsUpdate.empty.copy(
+                        sleep_quality_dialog_q3_text = value
+                    )
+                )
+            }
+        )
+    }
+
+    if (sleep_quality_dialog_q2_textS.value) {
+        StringValueDialog(
+            "Текст кнопки \"Ужасно\" про качество сна",
+            settings.sleep_quality_dialog_q2_text,
+            { sleep_quality_dialog_q2_textS.value = false },
+            { value ->
+                db.updateSettings(
+                    Database.SettingsUpdate.empty.copy(
+                        sleep_quality_dialog_q2_text = value
+                    )
+                )
+            }
+        )
+    }
+
+    if (sleep_quality_dialog_q1_textS.value) {
+        StringValueDialog(
+            "Текст кнопки \"Не спал\" про качество сна",
+            settings.sleep_quality_dialog_q1_text,
+            { sleep_quality_dialog_q1_textS.value = false },
+            { value ->
+                db.updateSettings(
+                    Database.SettingsUpdate.empty.copy(
+                        sleep_quality_dialog_q1_text = value
+                    )
+                )
+            }
+        )
+    }
+
+    if(resetSleepBalanceS.value) {
+        QuestionDialog(
+            "Это действие обнуляет значение сонного долга в последней записи. Значение в прошлых записях не изменится. Продолжить?",
+            { resetSleepBalanceS.value = false },
+            { db.resetSleepBalance() },
+        )
+    }
 }
 
 @Composable
@@ -193,6 +506,13 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
     val db = DbContext.current
     val context = LocalContext.current
     val currentTimezone = getCurrentTime().zone
+
+    val showSettingsS = remember { mutableStateOf(false) }
+    if(showSettingsS.value) {
+        BackHandler { showSettingsS.value = false }
+        SettingsScreen()
+        return
+    }
 
     Screen(
         Modifier
@@ -260,6 +580,8 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
 
                 val info = db?.getLatestSleepPeriodData() ?: return@run "Пока нет данных"
 
+                val settings = db.getSettings()
+
                 // @formatter:off
                 return@run arrayOf(
                     "Время пробуждения: "
@@ -272,7 +594,7 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
                             info.fallAsleep?.let { it.atZone(currentTimezone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")) }
                                 ?: "Н/Д"
                         ),
-                    "Качество: " + qualityToString(info.quality),
+                    "Качество: " + qualityToString(info.quality, settings),
                     "Продолжительность: " + durationToHHMM(info.totalSleepDuration),
                 ).joinToString("\n")
                 // @formatter:on
@@ -294,31 +616,55 @@ fun BedroomScreen(animatable: Float, toCellar: () -> Unit) {
                 Modifier
                     .freePosition(0f, safeSize.y * 0.7f, safeSize.x * 0.65f, safeSize.y * 0.15f)
                     .clickable {
-                        db?.startSleepPeriod(Database.SleepRecordInput(
-                            getCurrentTime(),
-                            defaultTimeToFallAsleepMinutes,
-                            defaultMinimumSleepDurationMinutes
-                        ))
-                        sleepControlsUpdate(context)
+                        db?.let {
+                            val settings = it.getSettings()
+                            it.startSleepPeriod(
+                                Database.SleepRecordInput(
+                                    getCurrentTime(),
+                                    settings.time_to_fall_asleep_minutes.toLong(),
+                                    defaultMinimumSleepDurationMinutes,
+                                )
+                            )
+                            sleepControlsUpdate(context)
+                        }
                     }
             ) {}
 
             Box(
                 Modifier
-                    .freePosition(safeSize.x * 0.7f, safeSize.y * 0.6f, safeSize.x * 0.3f, safeSize.y * 0.15f)
+                    .freePosition(
+                        safeSize.x * 0.7f,
+                        safeSize.y * 0.6f,
+                        safeSize.x * 0.3f,
+                        safeSize.y * 0.15f
+                    )
                     .clickable {
-                        db?.endSleepPeriod(Database.SleepRecordInput(
-                            getCurrentTime(),
-                            defaultTimeToFallAsleepMinutes,
-                            defaultMinimumSleepDurationMinutes
-                        ))
-                        sleepControlsUpdate(context)
+                        db?.let {
+                            val settings = it.getSettings()
+                            it.endSleepPeriod(
+                                Database.SleepRecordInput(
+                                    getCurrentTime(),
+                                    settings.time_to_fall_asleep_after_interruption_minutes.toLong(),
+                                    defaultMinimumSleepDurationMinutes
+                                )
+                            )
+                            sleepControlsUpdate(context)
+                        }
                     }
             ) {}
         }
 
         Column(Modifier.fillMaxSize()) {
             CurrentTimeDebug()
+
+            Row(Modifier.fillMaxWidth()) {
+                Row(Modifier.weight(1f)) {}
+                Box(Modifier.clickable { showSettingsS.value = true }) {
+                    Image(Icons.Default.Settings, "", Modifier
+                        .padding(10.dp)
+                        .height(20.dp))
+                }
+            }
 
             Column(Modifier.weight(1.0f)) {}
 
@@ -367,7 +713,9 @@ fun CurrentTimeDebug() {
         Button({ overridingTimeS.value = !overridingTimeS.value }, Modifier.fillMaxWidth()) {
             Text(if(overridingTimeS.value) "Подмена времени включена" else "Подмена времени отключена")
         }
-        Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+        Row(modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)) {
 
             TextField(
                 value = timeTextS.value,
@@ -380,7 +728,9 @@ fun CurrentTimeDebug() {
             Image(
                 if(parsedTime != null) Icons.Default.Check else Icons.Default.Close,
                 contentDescription = null,
-                Modifier.fillMaxHeight().aspectRatio(1.0f)
+                Modifier
+                    .fillMaxHeight()
+                    .aspectRatio(1.0f)
             )
         }
     }
@@ -392,6 +742,7 @@ fun BedroomPreview() {
     BedroomScreen(0f, {})
 }
 
+// @Preview
 @Composable
 fun DetailsPreview() {
     val records = listOf<SleepRecord>(
@@ -447,10 +798,15 @@ fun CellarSleepPeriodListItem(
     openDetails: (info: SavedSleepPeriodData) -> Unit,
 ) {
     val locale = LocalConfiguration.current.locales[0]
+    val db = DbContext.current
+    val settings = db?.getSettings()
 
     Column(modifier) {
         if(topGap) {
-            Row(Modifier.fillMaxWidth().height(1.dp).background(Color.Black)) {
+            Row(Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(Color.Black)) {
             }
         }
 
@@ -465,42 +821,17 @@ fun CellarSleepPeriodListItem(
                     DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(locale)
                 )
 
-                val qualityText = qualityToString(info.quality)
+                val qualityText = qualityToString(info.quality, settings)
                 val sleepDurationText = durationToHHMM(info.sleepBalance)
 
-                Text(dateText ?: "Unknown", Modifier.weight(1.0f).padding(end = 5.dp))
+                Text(dateText ?: "Unknown", Modifier
+                    .weight(1.0f)
+                    .padding(end = 5.dp))
                 Text(qualityText, Modifier.padding(end = 5.dp))
                 Text(sleepDurationText)
             }
         }
     }
-    /*
-    fun makeSleepPeriodDataDict(info: SavedSleepPeriodData): Dictionary {
-        val currentTimezone = getCurrentTime().zone
-
-        val result = Dictionary()
-        result["period_id"] = info.periodId
-        result["duration"] = durationSecToString(info.totalSleepDuration.seconds)
-        result["quality"] = when(info.quality) {
-            1 -> "Не спал"
-            2 -> "Ужасно"
-            3 -> "Не очень"
-            4 -> "Не идеально"
-            5 -> "Замечательно"
-            else -> "Не записано"
-        }
-        result["begin_time"] = info.fallAsleep?.atZone(currentTimezone)?.toLocalTime()?.truncatedTo(ChronoUnit.SECONDS).toString()
-        result["end_time"] = info.wakeUp?.atZone(currentTimezone)?.toLocalTime()?.truncatedTo(ChronoUnit.SECONDS).toString()
-        result["date"] = info.wakeUp?.atZone(currentTimezone)?.toLocalDate()?.format(
-            DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(Locale.getDefault())
-        )
-        result["interruption_count"] = info.interruptionCount
-        result["duration_before_falling_asleep"] = durationSecToString(info.durationBeforeFallingAsleep.seconds)
-        result["sleep_balance"] = durationSecToString(info.sleepBalance.seconds)
-
-        return result
-    }
-     */
 }
 
 fun durationToHHMM(duration: Duration): String {
@@ -515,7 +846,20 @@ fun durationToHHMM(duration: Duration): String {
     return sign + hours + ":" + minutes.toString().padStart(2, '0')
 }
 
-fun qualityToString(quality: Int): String {
+fun qualityToString(quality: Int, settings: Database.Settings?): String {
+    val customValue = when(quality) {
+        1 -> settings?.sleep_quality_dialog_q1_text
+        2 -> settings?.sleep_quality_dialog_q2_text
+        3 -> settings?.sleep_quality_dialog_q3_text
+        4 -> settings?.sleep_quality_dialog_q4_text
+        5 -> settings?.sleep_quality_dialog_q5_text
+        else -> null
+    }
+
+    return (customValue ?: "").ifBlank { qualityToDefaultString(quality) }
+}
+
+fun qualityToDefaultString(quality: Int): String {
     return when (quality) {
         1 -> "Не спал"
         2 -> "Ужасно"
@@ -560,7 +904,9 @@ fun SleepPeriodDetailsScreenDisplay(info: SavedSleepPeriodData, records: List<Sl
             )
             Column(Modifier.height(10.dp)) {}
 
-            Canvas(Modifier.fillMaxWidth().height(150.dp)) {
+            Canvas(Modifier
+                .fillMaxWidth()
+                .height(150.dp)) {
                 val width = size.width
                 val height = size.height
 
@@ -774,7 +1120,9 @@ fun CellarScreen(animatable: Float, toBedroom: () -> Unit) {
             Button({ toBedroom() }, Modifier.fillMaxWidth()) {
                 Text("В спалню")
             }
-            LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+            LazyColumn(Modifier
+                .fillMaxWidth()
+                .weight(1f)) {
                 items(sleepPeriods.size) { index ->
                     CellarSleepPeriodListItem(
                         Modifier,
@@ -808,17 +1156,21 @@ fun Main(showQualityDialogForS: MutableState<Int?>) {
             showQualityDialogForS.value = null
         }
 
+        val settings = db!!.getSettings()
+
         Dialog(
             onDismissRequest = { selectQuality(0) },
         ) {
-            Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 8.dp,) {
+            Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 8.dp) {
+                fun fb(a: String, b: String) = if(a.isEmpty()) b else a
+
                 Column(Modifier.padding(10.dp)) {
-                    Text("Как спалось?", Modifier.align(Alignment.CenterHorizontally))
-                    Button({ selectQuality(5) }, Modifier.fillMaxWidth()) { Text(qualityToString(5)) }
-                    Button({ selectQuality(4) }, Modifier.fillMaxWidth()) { Text(qualityToString(4)) }
-                    Button({ selectQuality(3) }, Modifier.fillMaxWidth()) { Text(qualityToString(3)) }
-                    Button({ selectQuality(2) }, Modifier.fillMaxWidth()) { Text(qualityToString(2)) }
-                    Button({ selectQuality(1) }, Modifier.fillMaxWidth()) { Text(qualityToString(1)) }
+                    Text(fb(settings.sleep_quality_dialog_title, "Как спалось?"), Modifier.align(Alignment.CenterHorizontally))
+                    Button({ selectQuality(5) }, Modifier.fillMaxWidth()) { Text(qualityToString(5, settings)) }
+                    Button({ selectQuality(4) }, Modifier.fillMaxWidth()) { Text(qualityToString(4, settings)) }
+                    Button({ selectQuality(3) }, Modifier.fillMaxWidth()) { Text(qualityToString(3, settings)) }
+                    Button({ selectQuality(2) }, Modifier.fillMaxWidth()) { Text(qualityToString(2, settings)) }
+                    Button({ selectQuality(1) }, Modifier.fillMaxWidth()) { Text(qualityToString(1, settings)) }
                 }
             }
         }

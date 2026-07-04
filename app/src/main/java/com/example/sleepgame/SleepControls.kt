@@ -142,15 +142,18 @@ class SleepNotificationActionReceiver : BroadcastReceiver() {
         val db = Database.forApp(context)
         when (intent.action) {
             actionRecordWakeUp -> {
-                db.recordWakeUp(Database.SleepRecordInput(getCurrentTime(), defaultTimeToFallAsleepMinutes, defaultMinimumSleepDurationMinutes))
+                val settings = db.getSettings()
+                db.recordWakeUp(Database.SleepRecordInput(getCurrentTime(), settings.time_to_fall_asleep_minutes.toLong(), defaultMinimumSleepDurationMinutes))
                 sleepControlsUpdate(context)
             }
             actionRecordSleepInterruption -> {
-                db.recordSleepInterruption(Database.SleepRecordInput(getCurrentTime(), defaultTimeToFallAsleepMinutes, defaultMinimumSleepDurationMinutes))
+                val settings = db.getSettings()
+                db.recordSleepInterruption(Database.SleepRecordInput(getCurrentTime(), settings.time_to_fall_asleep_after_interruption_minutes.toLong(), defaultMinimumSleepDurationMinutes))
                 sleepControlsUpdate(context)
             }
             actionRecordFallAsleep -> {
-                db.recordFallAsleep(Database.SleepRecordInput(getCurrentTime(), defaultTimeToFallAsleepMinutes, defaultMinimumSleepDurationMinutes))
+                val settings = db.getSettings()
+                db.recordFallAsleep(Database.SleepRecordInput(getCurrentTime(), settings.time_to_fall_asleep_after_interruption_minutes.toLong(), defaultMinimumSleepDurationMinutes))
                 sleepControlsUpdate(context)
             }
         }
