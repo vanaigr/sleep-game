@@ -1,7 +1,6 @@
 package com.example.sleepgame
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,28 +10,144 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Bundle
+import android.os.PersistableBundle
 import android.util.Log
-import android.widget.RemoteViews
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
-private val TAG = "Sleep Controls"
+class SleepControlsActivity : androidx.activity.ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
-private val CHANNEL_ID = "sleep_channel_v2"
+        val db = Database.forApp(this)
+
+        setContent {
+            CompositionLocalProvider(DbContext provides db) {
+                Overlay()
+            }
+        }
+
+        lifecycleScope.launch {
+            snapshotFlow { db.sleepPeriodsVersion.value }
+                .collect {
+                    if(!isSleepPeriodActive(db)) finish()
+                }
+        }
+    }
+}
+
+@Preview
+@Composable
+fun Preview() {
+    Box(Modifier.width(450.dp).height(1000.dp)) {
+        Overlay()
+    }
+}
+
+@Composable
+fun Overlay() {
+    val context = LocalContext.current
+    val db = DbContext.current
+
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp).align(Alignment.Center), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Button(
+                {
+                    db?.let { db ->
+                        val settings = db.getSettings()
+                        db.recordFallAsleep(Database.SleepRecordInput(getCurrentTime(), settings.time_to_fall_asleep_after_interruption_minutes.toLong(), defaultMinimumSleepDurationMinutes))
+                        sleepControlsUpdate(context)
+                    }
+                },
+                Modifier.fillMaxWidth()
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Записать засыпание")
+                    Image(painterResource(R.drawable.moon), "", Modifier.height(20.dp))
+                }
+            }
+
+            Button(
+                {
+                    db?.let { db ->
+                        val settings = db.getSettings()
+                        db.recordSleepInterruption(Database.SleepRecordInput(getCurrentTime(), settings.time_to_fall_asleep_after_interruption_minutes.toLong(), defaultMinimumSleepDurationMinutes))
+                        sleepControlsUpdate(context)
+                    }
+                },
+                Modifier.fillMaxWidth()
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Записать ночное пробуждение")
+                    //Image(painterResource(R.drawable.moon), "", Modifier.height(20.dp))
+                }
+            }
+
+            Button(
+                {
+                    db?.let { db ->
+                        val settings = db.getSettings()
+                        db.recordWakeUp(Database.SleepRecordInput(getCurrentTime(), settings.time_to_fall_asleep_minutes.toLong(), defaultMinimumSleepDurationMinutes))
+                        sleepControlsUpdate(context)
+                    }
+                },
+                Modifier.fillMaxWidth()
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Записать пробуждение")
+                    Image(painterResource(R.drawable.sun), "", Modifier.height(20.dp))
+                }
+            }
+        }
+    }
+}
+
+private val channelId = "sleep_channel_v2"
 private val OLD_CHANNEL_IDS = arrayOf("sleep_channel")
 private val sleepControlsNotificationId = 1001
 
+private fun isSleepPeriodActive(db: Database): Boolean {
+    val period = db.getLatestSleepPeriod()
+    return !(period == null || period.ended)
+}
 
 fun sleepControlsUpdate(context: Context) {
-    val period = Database.forApp(context).getLatestSleepPeriod()
-    if(period == null || period.ended) sleepControlsHide(context)
-    else sleepControlsShow(context)
+    if(isSleepPeriodActive(Database.forApp(context))) sleepControlsShow(context)
+    else sleepControlsHide(context)
 
     sleepQualityUpdate()
 }
 
-fun sleepQualityUpdate() {
+private fun sleepQualityUpdate() {
     val TAG = "Q Check"
 
     Log.d(TAG, "Begin")
@@ -66,7 +181,7 @@ fun createSleepControlsChannel(context: Activity) {
 
     //if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
     val channel = NotificationChannel(
-        CHANNEL_ID,
+        channelId,
         "Кнопки записи сна",
         NotificationManager.IMPORTANCE_HIGH
     ).apply {
@@ -80,88 +195,35 @@ fun createSleepControlsChannel(context: Activity) {
     //}
 }
 
-fun sleepControlsHide(context: Context) {
+private fun sleepControlsHide(context: Context) {
     NotificationManagerCompat.from(context).cancel(sleepControlsNotificationId)
 }
 
-@SuppressLint("MissingPermission")
-fun sleepControlsShow(context: Context) {
-    val remoteViews = RemoteViews(context.packageName, R.layout.sleep_controls_notification)
+private fun sleepControlsShow(context: Context) {
+    if (ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+        return
+    }
 
-    remoteViews.setOnClickPendingIntent(
-        R.id.button_wake_up,
-        PendingIntent.getBroadcast(
-            context,
-            0,
-            Intent(context, SleepNotificationActionReceiver::class.java).apply {
-                action = SleepNotificationActionReceiver.actionRecordWakeUp
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    )
-    remoteViews.setOnClickPendingIntent(
-        R.id.button_sleep_interruption,
-        PendingIntent.getBroadcast(
-            context,
-            1,
-            Intent(context, SleepNotificationActionReceiver::class.java).apply {
-                action = SleepNotificationActionReceiver.actionRecordSleepInterruption
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    )
-    remoteViews.setOnClickPendingIntent(
-        R.id.button_fall_asleep,
-        PendingIntent.getBroadcast(
-            context,
-            2,
-            Intent(context, SleepNotificationActionReceiver::class.java).apply {
-                action = SleepNotificationActionReceiver.actionRecordFallAsleep
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+    val intent = Intent(context, SleepControlsActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    }
+
+    val pendingIntent = PendingIntent.getActivity(
+        context,
+        0,
+        intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
-    val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-        .setSmallIcon(R.drawable.ic_launcher_foreground)
-        .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-        .setCustomContentView(remoteViews)
-        .setCustomBigContentView(remoteViews)
+    val notification = NotificationCompat.Builder(context, channelId)
+        .setSmallIcon(R.drawable.sun)
+        .setContentTitle("Данные о сне записываются")
+        .setContentText("Нажмите чтобы открыть быстрые кнопки записи")
         .setOngoing(true)
+        .setContentIntent(pendingIntent)
+        .setAutoCancel(false)
         .setOnlyAlertOnce(true)
-        .setPriority(NotificationCompat.PRIORITY_HIGH)
-        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-        .setCategory(NotificationCompat.CATEGORY_REMINDER)
         .build()
 
     NotificationManagerCompat.from(context).notify(sleepControlsNotificationId, notification)
-}
-
-class SleepNotificationActionReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        val db = Database.forApp(context)
-        when (intent.action) {
-            actionRecordWakeUp -> {
-                val settings = db.getSettings()
-                db.recordWakeUp(Database.SleepRecordInput(getCurrentTime(), settings.time_to_fall_asleep_minutes.toLong(), defaultMinimumSleepDurationMinutes))
-                sleepControlsUpdate(context)
-            }
-            actionRecordSleepInterruption -> {
-                val settings = db.getSettings()
-                db.recordSleepInterruption(Database.SleepRecordInput(getCurrentTime(), settings.time_to_fall_asleep_after_interruption_minutes.toLong(), defaultMinimumSleepDurationMinutes))
-                sleepControlsUpdate(context)
-            }
-            actionRecordFallAsleep -> {
-                val settings = db.getSettings()
-                db.recordFallAsleep(Database.SleepRecordInput(getCurrentTime(), settings.time_to_fall_asleep_after_interruption_minutes.toLong(), defaultMinimumSleepDurationMinutes))
-                sleepControlsUpdate(context)
-            }
-        }
-    }
-
-    companion object {
-        val actionRecordFallAsleep = "ACTION_RECORD_FALL_ASLEEP"
-        val actionRecordWakeUp = "ACTION_RECORD_WAKE_UP"
-        val actionRecordSleepInterruption = "ACTION_RECORD_SLEEP_INTERRUPTION"
-    }
 }
