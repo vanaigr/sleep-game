@@ -5,7 +5,7 @@
   "showAttachments": false,
   "hideUnresolved": false,
   "showOrphans": true,
-  "collapse-color-groups": false,
+  "collapse-color-groups": true,
   "colorGroups": [
     {
       "query": "path:Оглавление",
@@ -50,9 +50,9 @@
   "lineSizeMultiplier": 1.2460498960499,
   "collapse-forces": false,
   "centerStrength": 0.495841995841996,
-  "repelStrength": 10.1663201663202,
+  "repelStrength": 10,
   "linkStrength": 1,
-  "linkDistance": 265,
-  "scale": 0.7132754626224407,
+  "linkDistance": 216,
+  "scale": 1.0023401022212408,
   "close": true
 }
